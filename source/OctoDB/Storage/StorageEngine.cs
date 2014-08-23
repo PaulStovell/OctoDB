@@ -11,221 +11,230 @@ using OctoDB.Diagnostics;
 
 namespace OctoDB.Storage
 {
-    public class StorageEngine : IDisposable
+    public class StorageEngine : IStorageEngine
     {
-        readonly string rootPath;
         readonly Repository repository;
         readonly JsonSerializer serializer = new JsonSerializer { Formatting = Formatting.Indented };
         readonly ReaderWriterLockSlim sync = new ReaderWriterLockSlim();
+        readonly IStatistics statistics = new Statistics();
 
         public StorageEngine(string rootPath)
         {
-            serializer.ContractResolver = new GitDbContractResolver();
-            this.rootPath = rootPath;
-
+            serializer.ContractResolver = new OctoDbContractResolver();
+            
             Repository.Init(rootPath);
 
             repository = new Repository(rootPath);
-
-            if (repository.Head.Tip == null) return;
-            using (PerformanceCounters.GitReset())
+            if (repository.Head.Tip == null)
             {
-                repository.Reset(ResetMode.Hard);
+                var blob = repository.ObjectDatabase.CreateBlob(new MemoryStream(Encoding.UTF8.GetBytes("* text=auto")));
+                var definition = new TreeDefinition();
+                definition.Add(".gitattributes", blob, Mode.NonExecutableFile);
+                var tree = repository.ObjectDatabase.CreateTree(definition);
+                var commit = repository.ObjectDatabase.CreateCommit(
+                    new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
+                    new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
+                    "Initialize empty repository",
+                    tree,
+                    new Commit[0],
+                    false);
+
+                repository.Refs.UpdateTarget(repository.Refs.Head, commit.Id);
             }
         }
 
-        public List<HistoryEntry> History(string id)
+        public IStatistics Statistics { get { return statistics; } }
+
+        public IAnchor GetCurrentAnchor()
         {
             sync.EnterReadLock();
             try
             {
-                var workingName = id.Trim('\\', '/').Replace("/", "\\");
-                var path = Path.Combine(rootPath, workingName + ".json");
+                var tip = repository.Head.Tip;
+                return new GitSnapshotAnchor(tip);
+            }
+            finally
+            {
+                sync.ExitReadLock();
+            }
+        }
 
-                var parent = Path.GetDirectoryName(path);
-                if (parent != null && !Directory.Exists(parent))
+        public Dictionary<string, object> LoadSnapshot(IAnchor anchor, IAnchor previous)
+        {
+            var currentGit = (GitSnapshotAnchor)anchor;
+            var previousGit = (GitSnapshotAnchor)previous;
+
+            if (previousGit != null)
+            {
+                foreach (var pair in previousGit.DocumentsById)
                 {
-                    Directory.CreateDirectory(parent);
+                    currentGit.DocumentsById[pair.Key] = pair.Value;
                 }
 
-                if (!File.Exists(path))
-                    return new List<HistoryEntry>();
-
-                var entries = new List<HistoryEntry>();
-                foreach (var commit in repository.Head.Commits)
+                foreach (var pair in previousGit.DocumentBlobShas)
                 {
-                    var found = TreeContainsFile(commit.Tree, workingName + ".json");
-                    if (found != null)
+                    currentGit.DocumentBlobShas[pair.Key] = pair.Value;
+                }
+            }
+
+            if (previousGit != null && currentGit.Id == previousGit.Id)
+            {
+                statistics.IncrementSnapshotReuse();
+                return currentGit.DocumentsById;
+            }
+            
+            statistics.IncrementSnapshotRebuild();
+
+            var seen = new HashSet<string>();
+            
+            var loaded = new List<object>();
+            LoadTree(currentGit, entry => true, (entry, type) =>
+            {
+                seen.Add(entry.Path);
+                return true;
+            }, loaded);
+
+            var remove = new HashSet<string>();
+            foreach (var path in currentGit.DocumentsById.Keys)
+            {
+                if (!seen.Contains(path))
+                {
+                    remove.Add(path);
+                }
+            }
+
+            foreach (var item in remove)
+            {
+                currentGit.DocumentsById.Remove(item);
+                currentGit.DocumentBlobShas.Remove(item);
+            }
+
+            return currentGit.DocumentsById;
+        }
+
+        public List<T> LoadAll<T>(IAnchor anchor)
+        {
+            var parentPath = Conventions.GetParentPath(typeof (T));
+
+            var loaded = new List<object>();
+            LoadTree(anchor, entry => entry.Path.Replace("\\", "/").StartsWith(parentPath), (entry, type) => true, loaded);
+            return loaded.OfType<T>().ToList();
+        }
+
+        public T Load<T>(IAnchor anchor, string id)
+        {
+            var parentPath = Conventions.GetPath(typeof(T), id);
+
+            var loaded = new List<object>();
+            LoadTree(anchor, entry =>
+            {
+                return parentPath.StartsWith(entry.Path);
+            }, (entry, type) => entry.Path == parentPath, loaded);
+            return loaded.OfType<T>().FirstOrDefault();
+        }
+
+        void LoadTree(IAnchor anchor, Func<TreeEntry, bool> traverseFilter, Func<TreeEntry, Type, bool> loadFilter, List<object> loaded)
+        {
+            var gitReference = anchor as GitSnapshotAnchor;
+            if (gitReference == null) throw new InvalidOperationException("Not a valid time reference");
+            if (gitReference.Commit == null)
+            {
+                return;
+            }
+
+            sync.EnterReadLock();
+            try
+            {
+                var tree = gitReference.Commit.Tree;
+                LoadTree(gitReference, tree, traverseFilter, loadFilter, loaded);
+            }
+            finally
+            {
+                sync.ExitReadLock();
+            }
+        }
+
+        void LoadTree(GitSnapshotAnchor anchor, Tree tree, Func<TreeEntry, bool> traverseFilter, Func<TreeEntry, Type, bool> loadFilter, List<object> loaded)
+        {
+            foreach (var entry in tree)
+            {
+                if (entry.TargetType == TreeEntryTargetType.Tree)
+                {
+                    var child = entry.Target as Tree;
+                    if (child != null)
                     {
-                        var entry = new HistoryEntry()
+                        if (traverseFilter(entry))
                         {
-                            Id = workingName + ".json",
-                            Hash = commit.Sha,
-                            Modified = commit.Author.When
-                        };
-                        entries.Add(entry);
+                            LoadTree(anchor, child, traverseFilter, loadFilter, loaded);                            
+                        }
+                    }
+                } 
+                else if (entry.TargetType == TreeEntryTargetType.Blob)
+                {
+                    var type = Conventions.GetType(entry.Path);
+                    if (type == null)
+                        continue;
+
+                    if (loadFilter(entry, type))
+                    {
+                        var blob = entry.Target as Blob;
+                        var instance = Load(anchor, blob, entry, tree, type);
+                        if (instance != null)
+                        {
+                            loaded.Add(instance);                            
+                        }
                     }
                 }
-
-                return entries;
-            }
-            finally
-            {
-                sync.ExitReadLock();
             }
         }
 
-        public T LoadAt<T>(string id, string hash)
+        object Load(GitSnapshotAnchor anchor, Blob fileBlob, TreeEntry entry, Tree parent, Type type)
         {
-            sync.EnterReadLock();
-            try
+            var fileName = entry.Name;
+
+            object existing;
+            if (anchor.DocumentsById.TryGetValue(entry.Path, out existing) && anchor.DocumentBlobShas[entry.Path] == fileBlob.Sha)
             {
-                var workingName = id.Trim('\\', '/').Replace("/", "\\");
-                var commit = repository.Head.Commits.First(c => c.Sha == hash);
-                var fileBlob = TreeContainsFile(commit.Tree, workingName + ".json");
+                return existing;
+            }
 
-                using (PerformanceCounters.Deserialization())
-                using (var streamReader = new StreamReader(fileBlob.GetContentStream(), Encoding.UTF8))
-                using (var jsonReader = new JsonTextReader(streamReader))
-                {
-                    var context =
-                        new GitDbSerializationContext(
-                            delegate(object owner, string propertyName, ExternalAttribute attribute)
+            using (statistics.MeasureDeserialization())
+            using (var streamReader = new StreamReader(fileBlob.GetContentStream(new FilteringOptions(entry.Path)), Encoding.UTF8))
+            using (var jsonReader = new JsonTextReader(streamReader))
+            {
+                var context =
+                    new OctoDbSerializationContext(
+                        delegate(object owner, string propertyName, ExternalAttribute attribute)
+                        {
+                            using (statistics.MeasureAttachments())
                             {
-                                var key = Path.GetFileName(workingName) +
-                                          (owner is T
-                                              ? ""
-                                              : "." + owner.GetType().GetProperty("Id").GetValue(owner, null)) + "." +
-                                          attribute.Name;
-                                var attachmentWorkingPath = Path.Combine(Path.GetDirectoryName(workingName), key);
+                                var key = Path.GetFileNameWithoutExtension(fileName) + (type.IsInstanceOfType(owner) ? "" : "." + owner.GetType().GetProperty("Id").GetValue(owner, null)) + "." + attribute.Name;
+                                var attachmentEntry = parent.FirstOrDefault(n => n.Name == key);
+                                if (attachmentEntry == null) return null;
+                                var attachmentBlob = attachmentEntry.Target as Blob;
+                                if (attachmentBlob == null) return null;
 
-                                var attachmentBlob = TreeContainsFile(commit.Tree, attachmentWorkingPath);
-                                using (
-                                    var attachmentStreamReader = new StreamReader(attachmentBlob.GetContentStream(),
-                                        Encoding.UTF8))
+                                using (var attachmentStreamReader = new StreamReader(attachmentBlob.GetContentStream(new FilteringOptions(attachmentEntry.Path)), Encoding.UTF8))
                                 {
                                     return attachmentStreamReader.ReadToEnd();
                                 }
-                            });
+                            }
+                        });
 
-                    serializer.Context = new StreamingContext(serializer.Context.State, context);
-                    var item = serializer.Deserialize<T>(jsonReader);
-
-                    return item;
-                }
-            }
-            finally
-            {
-                sync.ExitReadLock();
-            }
-        }
-
-        private Blob TreeContainsFile(Tree tree, string filename)
-        {
-            if (tree.All(x => x.Path != filename))
-                return
-                    tree.Where(x => x.TargetType == TreeEntryTargetType.Tree)
-                        .Select(x => x.Target as Tree)
-                        .Select(branch => TreeContainsFile(branch, filename))
-                        .FirstOrDefault(found => found != null);
-
-            var o = tree.First(x => x.Path == filename);
-            return (Blob)o.Target;
-        }
-
-        public T Load<T>(string id) where T : class
-        {
-            //sync.EnterReadLock();
-            try
-            {
-                var workingName = id.Trim('\\', '/');
-                var path = Path.Combine(rootPath, workingName + ".json");
-
-                var parent = Path.GetDirectoryName(path);
-                if (parent != null && !Directory.Exists(parent))
-                {
-                    Directory.CreateDirectory(parent);
-                }
-
-                if (!File.Exists(path))
-                {
-                    return null;
-                }
-
-                using (PerformanceCounters.Deserialization())
-                using (var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var streamReader = new StreamReader(stream, Encoding.UTF8))
-                using (var jsonReader = new JsonTextReader(streamReader))
-                {
-                    var context =
-                        new GitDbSerializationContext(
-                            delegate(object owner, string propertyName, ExternalAttribute attribute)
-                            {
-                                var key = Path.GetFileName(workingName) +
-                                          (owner is T
-                                              ? ""
-                                              : "." + owner.GetType().GetProperty("Id").GetValue(owner, null)) + "." +
-                                          attribute.Name;
-                                var attachmentWorkingPath = Path.Combine(Path.GetDirectoryName(workingName), key);
-                                var attachmentPath = Path.Combine(rootPath, attachmentWorkingPath);
-                                if (!File.Exists(attachmentPath))
-                                {
-                                    return null;
-                                }
-
-                                using (
-                                    var attachmentStream = File.Open(attachmentPath, FileMode.Open, FileAccess.Read,
-                                        FileShare.Read))
-                                using (var attachmentStreamReader = new StreamReader(attachmentStream, Encoding.UTF8))
-                                {
-                                    return attachmentStreamReader.ReadToEnd();
-                                }
-                            });
-
-                    serializer.Context = new StreamingContext(serializer.Context.State, context);
-                    var item = serializer.Deserialize<T>(jsonReader);
-
-                    return item;
-                }
-            }
-            finally
-            {
-                //sync.ExitReadLock();
-            }
-        }
-
-        public List<T> LoadAll<T>(string prefix) where T : class
-        {
-            sync.EnterReadLock();
-            try
-            {
-                var root = Path.Combine(rootPath, prefix);
-                if (!Directory.Exists(root))
-                {
-                    return new List<T>();
-                }
-
-                var results = new List<T>();
-                var files = Directory.GetFiles(root, "*.json", SearchOption.AllDirectories);
-                foreach (var file in files)
-                {
-                    results.Add(Load<T>(file.Substring(rootPath.Length + 1).Replace(".json", "")));
-                }
-
-                return results;
-            }
-            finally
-            {
-                sync.ExitReadLock();
+                serializer.Context = new StreamingContext(serializer.Context.State, context);
+                var result = serializer.Deserialize(jsonReader, type);
+                statistics.IncrementLoaded();
+                anchor.DocumentsById[entry.Path] = result;
+                anchor.DocumentBlobShas[entry.Path] = fileBlob.Sha;
+                return result;
             }
         }
 
         public IStorageBatch Batch()
         {
             sync.EnterWriteLock();
-            
             {
-                var newBatch = new StorageBatch(repository, rootPath, serializer, delegate
+                var newBatch = new StorageBatch(repository, statistics, serializer, delegate
                 {
                     sync.ExitWriteLock();
                 });
@@ -234,153 +243,147 @@ namespace OctoDB.Storage
             }
         }
 
+        public void Dispose()
+        {
+            sync.EnterWriteLock();
+            try
+            {
+                repository.Dispose();
+            }
+            finally
+            {
+                sync.ExitWriteLock();
+            }
+        }
+
         class StorageBatch : IStorageBatch
         {
             private readonly Repository repository;
-            private readonly string rootPath;
+            readonly IStatistics statistics;
             private readonly JsonSerializer serializer;
             private readonly Action released;
-            private readonly HashSet<string> filesToStage = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            private readonly HashSet<string> filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            TreeDefinition treeDefinition;
+            Commit parent;
 
-            public StorageBatch(Repository repository, string rootPath, JsonSerializer serializer, Action released)
+            public StorageBatch(Repository repository, IStatistics statistics, JsonSerializer serializer, Action released)
             {
                 this.repository = repository;
-                this.rootPath = rootPath;
+                this.statistics = statistics;
                 this.serializer = serializer;
                 this.released = released;
             }
 
             public void Prepare()
             {
-                if (repository.Head.Tip == null)
-                    return;
-
-                using (PerformanceCounters.GitReset())
+                parent = repository.Head.Tip;
+                if (parent == null)
                 {
-                    repository.Reset(ResetMode.Hard);
+                    treeDefinition = new TreeDefinition();
+                }
+                else
+                {
+                    treeDefinition = TreeDefinition.From(parent.Tree);
                 }
             }
 
-            public void Put(string uri, object document)
+            public void Put(object document)
             {
-                var workingName = uri.Trim(new[] { '/', '\\' }).Replace("/", "\\");
-                var workingPath = workingName + ".json";
-                var path = Path.Combine(rootPath, workingPath);
-                var parent = Path.GetDirectoryName(path);
-                if (parent != null && !Directory.Exists(parent))
+                using (statistics.MeasureGitStaging())
                 {
-                    Directory.CreateDirectory(parent);
-                }
+                    var uri = Conventions.GetPath(document.GetType(), document);
 
-                List<AttachmentFoundEvent> attachments;
+                    List<AttachmentFoundEvent> attachments;
 
-                var existingFiles = Directory.GetFiles(parent, Path.GetFileName(workingName) + ".*");
-
-                using (PerformanceCounters.Serialization())
-                {
-                    using (var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read))
-                    using (var streamWriter = new StreamWriter(stream, Encoding.UTF8))
-                    using (var writer = new JsonTextWriter(streamWriter))
+                    using (statistics.MeasureSerialization())
                     {
-                        var context = new GitDbSerializationContext(null);
-                        serializer.Context = new StreamingContext(serializer.Context.State, context);
-                        serializer.Serialize(writer, document);
-                        attachments = context.Attachments;
-                        writer.Flush();
-                    }
-                }
-
-                filesToStage.Add(workingPath);
-
-                foreach (var attachment in attachments)
-                {
-                    string attachmentWorkingPath;
-
-                    using (PerformanceCounters.Attachments())
-                    {
-                        var owner = attachment.Owner;
-                        var key = Path.GetFileName(workingName) + (owner == document ? "" : "." + owner.GetType().GetProperty("Id").GetValue(owner, null)) + "." + attachment.Attribute.Name;
-                        attachmentWorkingPath = Path.Combine(Path.GetDirectoryName(workingName), key);
-                        var attachmentPath = Path.Combine(rootPath, attachmentWorkingPath);
-                        using (var stream = File.Open(attachmentPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                        using (var stream = new MemoryStream())
                         using (var streamWriter = new StreamWriter(stream, Encoding.UTF8))
+                        using (var writer = new JsonTextWriter(streamWriter))
                         {
-                            streamWriter.Write((string)attachment.Value);
+                            var context = new OctoDbSerializationContext(null);
+                            serializer.Context = new StreamingContext(serializer.Context.State, context);
+                            serializer.Serialize(writer, document, typeof (object));
+                            attachments = context.Attachments;
                             streamWriter.Flush();
+
+                            stream.Seek(0, SeekOrigin.Begin);
+
+                            var blob = repository.ObjectDatabase.CreateBlob(stream, uri);
+                            treeDefinition.Add(uri, blob, Mode.NonExecutableFile);
                         }
                     }
 
-                    filesToStage.Add(attachmentWorkingPath);
-                }
-
-                foreach (var file in existingFiles)
-                {
-                    var relative = file.Substring(rootPath.Length + 1);
-                    if (filesToStage.Contains(relative))
-                        continue;
-
-                    File.Delete(file);
-                    filesToDelete.Add(relative);
+                    foreach (var attachment in attachments)
+                    {
+                        using (statistics.MeasureAttachments())
+                        {
+                            var owner = attachment.Owner;
+                            var key = Path.Combine(Path.GetDirectoryName(uri), Path.GetFileNameWithoutExtension(uri)) + (owner == document ? "" : "." + owner.GetType().GetProperty("Id").GetValue(owner, null)) + "." + attachment.Attribute.Name;
+                            if (attachment.Value != null)
+                            {
+                                var blob = repository.ObjectDatabase.CreateBlob(new MemoryStream(Encoding.UTF8.GetBytes((string)attachment.Value)), uri);
+                                treeDefinition.Add(key, blob, Mode.NonExecutableFile);
+                            }
+                            else
+                            {
+                                treeDefinition.Remove(key);
+                            }
+                        }
+                    }
                 }
             }
 
-            public void Delete(string uri)
+            public void Delete(object document)
             {
-                var workingPath = uri.TrimStart(new[] { '/', '\\' }).Replace("/", "\\") + ".json";
-                var path = Path.Combine(rootPath, workingPath);
-                var parent = Path.GetDirectoryName(path);
-                if (parent != null && !Directory.Exists(parent))
+                using (statistics.MeasureGitStaging())
                 {
-                    return;
+                    var uri = Conventions.GetPath(document.GetType(), document);
+                    treeDefinition.Remove(uri);
                 }
-
-                repository.Index.Remove(workingPath);
             }
 
             public void Commit(string message)
             {
-                using (PerformanceCounters.GitStaging())
+                using (statistics.MeasureGitCommit())
                 {
-                    filesToDelete.ExceptWith(filesToStage);
+                    var tree = repository.ObjectDatabase.CreateTree(treeDefinition);
 
-                    if (filesToDelete.Count > 0)
-                    {
-                        repository.Index.Remove(filesToDelete, false);
-                    }
+                    var parents = parent == null ? new Commit[0] : new[] {parent};
 
-                    if (filesToStage.Count > 0)
-                    {
-                        repository.Index.Stage(filesToStage);
-                    }
+                    var commit = repository.ObjectDatabase.CreateCommit(
+                        new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
+                        new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
+                        message,
+                        tree,
+                        parents,
+                        false
+                        );
 
-                    var status = repository.Index.RetrieveStatus();
-                    if (!status.IsDirty)
-                    {
-                        return;
-                    }
-                }
-
-                using (PerformanceCounters.GitCommit())
-                {
-                    repository.Commit(message, new Signature("Paul", "paul@paulstovell.com", DateTimeOffset.UtcNow));
+                    repository.Refs.UpdateTarget(repository.Refs.Head, commit.Id);
                 }
             }
 
             public void Dispose()
             {
-                using (PerformanceCounters.GitReset())
-                {
-                    repository.Reset(ResetMode.Hard);
-                }
-
                 if (released != null) released();
             }
         }
 
-        public void Dispose()
+        class GitSnapshotAnchor : IAnchor
         {
-            repository.Dispose();
+            readonly Commit commit;
+
+            public GitSnapshotAnchor(Commit commit)
+            {
+                this.commit = commit;
+                DocumentsById = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                DocumentBlobShas = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            public string Id { get { return Commit == null ? "" : Commit.Sha; } }
+            public Commit Commit { get { return commit; } }
+            public Dictionary<string, object> DocumentsById { get; private set; }
+            public Dictionary<string, string> DocumentBlobShas { get; private set; }
         }
     }
 }

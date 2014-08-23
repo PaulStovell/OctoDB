@@ -2,9 +2,10 @@
 
 namespace OctoDB.Tests.SampleModel
 {
+    [Document(@"projects\{id}\project.json")]
     public class Project
     {
-        public string Id { get; private set; }
+        public string Id { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
 

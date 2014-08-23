@@ -9,12 +9,12 @@ using OctoDB.Util;
 
 namespace OctoDB.Storage
 {
-    public class GitDbContractResolver : CamelCasePropertyNamesContractResolver
+    public class OctoDbContractResolver : CamelCasePropertyNamesContractResolver
     {
         protected override JsonContract CreateContract(Type objectType)
         {
             var interceptors = new List<AttachmentInterceptor>();
-            CallContext.SetData("GitDbAttachmentInterceptors", interceptors);
+            CallContext.SetData("OctoDbAttachmentInterceptors", interceptors);
 
             var serializer = base.CreateContract(objectType);
 
@@ -22,7 +22,7 @@ namespace OctoDB.Storage
             {
                 serializer.OnDeserializedCallbacks.Add((o, a) =>
                 {
-                    var context = (GitDbSerializationContext)a.Context;
+                    var context = (OctoDbSerializationContext)a.Context;
                     foreach (var interceptor in interceptors)
                     {
                         interceptor.WriteAttachment(o, context);
@@ -31,7 +31,7 @@ namespace OctoDB.Storage
 
                 serializer.OnSerializedCallbacks.Add((o, a) =>
                 {
-                    var context = (GitDbSerializationContext)a.Context;
+                    var context = (OctoDbSerializationContext)a.Context;
                     foreach (var interceptor in interceptors)
                     {
                         var found = interceptor.ReadAttachment(o);
@@ -43,7 +43,7 @@ namespace OctoDB.Storage
                 });
             }
 
-            CallContext.FreeNamedDataSlot("GitDbAttachmentInterceptors");
+            CallContext.FreeNamedDataSlot("OctoDbAttachmentInterceptors");
 
             return serializer;
         }
@@ -54,7 +54,7 @@ namespace OctoDB.Storage
             var attribute = (ExternalAttribute)member.GetCustomAttributes(typeof(ExternalAttribute), true).FirstOrDefault();
             if (attribute != null)
             {
-                var interceptors = (List<AttachmentInterceptor>)CallContext.GetData("GitDbAttachmentInterceptors");
+                var interceptors = (List<AttachmentInterceptor>)CallContext.GetData("OctoDbAttachmentInterceptors");
                 interceptors.Add(new AttachmentInterceptor(member, property.PropertyName, attribute));
 
                 property.Ignored = true;
@@ -88,7 +88,7 @@ namespace OctoDB.Storage
                 };
             }
 
-            public void WriteAttachment(object instance, GitDbSerializationContext context)
+            public void WriteAttachment(object instance, OctoDbSerializationContext context)
             {
                 var value = context.RequestAttachment(instance, propertyName, attribute);
                 readerWriter.Write(instance, value);

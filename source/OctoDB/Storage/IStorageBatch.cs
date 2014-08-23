@@ -4,8 +4,8 @@ namespace OctoDB.Storage
 {
     public interface IStorageBatch : IDisposable
     {
-        void Put(string uri, object o);
-        void Delete(string uri);
+        void Put(object o);
+        void Delete(object o);
         void Commit(string message);
     }
 }

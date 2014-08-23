@@ -5,11 +5,12 @@ using NUnit.Framework;
 using OctoDB.Diagnostics;
 using OctoDB.Storage;
 
-namespace OctoDB.Tests
+namespace OctoDB.Tests.Fixtures
 {
     public class StorageFixture
     {
         protected StorageEngine Storage { get; set; }
+        protected Store Store { get; set; }
 
         [SetUp]
         public void SetUp()
@@ -18,12 +19,13 @@ namespace OctoDB.Tests
             EnsurePath(path);
 
             Storage = new StorageEngine(path);
+            Store = new Store(Storage);
         }
 
         [TearDown]
         public void TearDown()
         {
-            PerformanceCounters.Print();
+            Storage.Statistics.Print();
 
             if (Storage != null)
             {

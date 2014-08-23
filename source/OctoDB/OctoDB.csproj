@@ -46,12 +46,21 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DocumentAttribute.cs" />
     <Compile Include="Storage\AttachmentFoundEvent.cs" />
     <Compile Include="Diagnostics\PerformanceCounters.cs" />
     <Compile Include="ExternalAttribute.cs" />
-    <Compile Include="Storage\GitDbContractResolver.cs" />
-    <Compile Include="Storage\GitDbSerializationContext.cs" />
+    <Compile Include="Storage\OctoDbContractResolver.cs" />
+    <Compile Include="Storage\OctoDbSerializationContext.cs" />
     <Compile Include="HistoryEntry.cs" />
+    <Compile Include="Storage\IAnchor.cs" />
+    <Compile Include="Storage\Conventions.cs" />
+    <Compile Include="Storage\IReadOnlySession.cs" />
+    <Compile Include="Storage\IStorageEngine.cs" />
+    <Compile Include="Storage\IWriteableSession.cs" />
+    <Compile Include="Storage\ReadOnlySession.cs" />
+    <Compile Include="Storage\Store.cs" />
+    <Compile Include="Storage\WriteableSession.cs" />
     <Compile Include="Util\IPropertyReaderWriter.cs" />
     <Compile Include="Storage\IStorageBatch.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

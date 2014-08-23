@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 namespace OctoDB.Storage
 {
-    public class GitDbSerializationContext
+    public class OctoDbSerializationContext
     {
         private readonly Func<object, string, ExternalAttribute, object> onRequestAttachment;
         readonly List<AttachmentFoundEvent> attachments = new List<AttachmentFoundEvent>();
 
-        public GitDbSerializationContext(Func<object, string, ExternalAttribute, object> onRequestAttachment)
+        public OctoDbSerializationContext(Func<object, string, ExternalAttribute, object> onRequestAttachment)
         {
             this.onRequestAttachment = onRequestAttachment;
         }
