@@ -1,24 +1,19 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using OctoDB.Diagnostics;
 
 namespace OctoDB.Storage
 {
     public class ReadOnlySession : IDisposable
     {
-        readonly IStorageEngine storageEngine;
         readonly IAnchor anchor;
-        readonly IDictionary<string, object> documentsById;
-        readonly IDictionary<Type, IList> documentsByType = new Dictionary<Type, IList>();
+        readonly DocumentSet documents;
+        readonly Action disposed;
 
-        public ReadOnlySession(IStorageEngine storageEngine, IAnchor anchor, IDictionary<string, object> documentsById)
+        public ReadOnlySession(IAnchor anchor, DocumentSet documents, Action disposed)
         {
-            this.storageEngine = storageEngine;
             this.anchor = anchor;
-            this.documentsById = documentsById;
+            this.documents = documents;
+            this.disposed = disposed;
         }
 
         public IAnchor Anchor { get { return anchor; } }
@@ -26,31 +21,20 @@ namespace OctoDB.Storage
         public T Load<T>(string id) where T : class
         {
             var path = Conventions.GetPath(typeof (T), id);
-            object result;
-            if (documentsById.TryGetValue(path, out result))
-            {
-                return result as T;
-            }
-
-            return null;
+            return documents.Get(path) as T;
         }
 
         public ReadOnlyCollection<T> Query<T>()
         {
-            IList result;
-            if (!documentsByType.TryGetValue(typeof (T), out result))
-            {
-                var documents = new ReadOnlyCollection<T>(documentsById.Values.OfType<T>().ToList());
-                result = documents;
-                documentsByType[typeof (T)] = documents;
-            }
-
-            return (ReadOnlyCollection<T>)result;
+            return new ReadOnlyCollection<T>(documents.GetAll<T>());
         }
 
         public void Dispose()
         {
-            storageEngine.Statistics.IncrementReadSessionsClosed();
+            if (disposed != null)
+            {
+                disposed();
+            }
         }
     }
 }

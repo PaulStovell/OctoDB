@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using NUnit.Framework;
 using OctoDB.Storage;
@@ -11,12 +12,118 @@ namespace OctoDB.Tests
     public class Usage : StorageFixture
     {
         [Test]
+        public void CreateSampleDataSet()
+        {
+            var createWatch = Stopwatch.StartNew();
+            using (var session = Store.OpenWriteSession())
+            {
+                for (var i = 0; i < 300; i++)
+                {
+                    session.Store(new Project { Id = "acme-" + i, Name = "ACME " + i, Description = "My **best** project" });
+                    session.Store(new DeploymentProcess { Id = "acme-" + i, Steps = new List<Step>
+                    {
+                        new Step { Name = "Step 1", Id = Guid.NewGuid().ToString(), Properties =
+                        {
+                            { "Foo.Bar", "Hello" },
+                            { "Foo.Baz", "Bye!" },
+                        }}
+                    } });
+                    session.Store(new VariableSet { Id = "acme-" + i, Variables =
+                    {
+                        { "DatabaseName", "MyDB" },
+                        { "ConnectionString", "Server=(local);Database=#{DatabaseName};trusted_Connection=true" },
+                    } });
+                }
+
+                for (var i = 0; i < 100; i++)
+                {
+                    session.Store(new DeploymentEnvironment { Id = "env-" + i, Name = "Environment " + i });
+                }
+
+                for (var i = 0; i < 2000; i++)
+                {
+                    session.Store(new Machine { Id = "machine-" + i, Name = "Machine " + i, Properties =
+                    {
+                        { "Url", "https://localhost:8080/" }
+                    }});
+                }
+
+                session.Commit("Create initial data set");
+            }
+
+            Console.WriteLine("Create took: " + createWatch.ElapsedMilliseconds + "ms");
+
+            createWatch.Restart();
+
+            using (var session = Store.OpenReadSession())
+            {
+                
+            }
+
+            Console.WriteLine("Read: " + createWatch.ElapsedMilliseconds + "ms");
+
+            createWatch.Restart();
+
+            using (var session = Store.OpenReadSession())
+            {
+
+            }
+
+            Console.WriteLine("Read again: " + createWatch.ElapsedMilliseconds + "ms");
+
+            createWatch.Restart();
+
+            using (var session = Store.OpenWriteSession())
+            {
+                session.Store(new Project { Id = "bam" });
+                session.Commit("Added another project");
+            }
+
+            Console.WriteLine("Write one document: " + createWatch.ElapsedMilliseconds + "ms");
+
+            createWatch.Restart();
+
+            using (var session = Store.OpenReadSession())
+            {
+
+            }
+
+            Console.WriteLine("Read again: " + createWatch.ElapsedMilliseconds + "ms");
+        }
+
+        [Test]
+        public void NoChanges()
+        {
+            using (var session = Store.OpenWriteSession())
+            {
+                session.Store(new Project { Id = "bam" });
+                session.Commit("Added another project");
+            }
+
+            using (var session = Store.OpenWriteSession())
+            {
+                session.Store(new Project { Id = "bam" });
+                session.Commit("Added another project");
+            }
+        }
+
+        [Test]
         public void ReadOnlySessionsReuseInstances()
         {
-            using (var batch = Storage.Batch())
+            if (Store.StorageEngine.IsRepositoryEmpty)
             {
-                batch.Put(new Project { Id = "acme-1", Description = "A", ScriptModule = "write-host 'hi'\r\n"});
-                batch.Commit("Added project 1");
+                using (var batch = Store.StorageEngine.Batch())
+                {
+                    //batch.PutText(".gitattributes", "* text=auto");
+                    batch.PutText("readme.md", "Hello **world**!");
+                    batch.Commit("Initialize empty repository");
+                }
+            }
+
+            using (var session = Store.OpenWriteSession())
+            {
+                session.Store(new Project { Id = "acme-1", Description = "A", ScriptModule = "write-host 'hi'\r\n" });
+                session.Commit("Added project 1");
             }
 
             Project projectA;
@@ -56,7 +163,7 @@ namespace OctoDB.Tests
         [Test]
         public void CanUseStore()
         {
-            using (var batch = Storage.Batch())
+            using (var session = Store.OpenWriteSession())
             {
                 for (var i = 0; i < 50; i++)
                 {
@@ -65,68 +172,25 @@ namespace OctoDB.Tests
                         Id = "acme-" + i,
                         Name = "My project 2",
                         Description = "Foo",
-                        ScriptModule = "Write-Host 'Hello'\r\n",
-                        Steps = new List<Step> {new Step {Id = "StepABCDEFG", ScriptModule = "Hello"}}
+                        ScriptModule = "Write-Host 'Hello'\r\n"
                     };
 
-                    batch.Put(project);
+                    session.Store(project);
                 }
 
-                batch.Commit("Added project 1");
+                session.Commit("Added 50 projects");
             }
-
-            var store = new Store(Storage);
 
             var watch = Stopwatch.StartNew();
             var count = 0;
             while (watch.ElapsedMilliseconds < 5000)
             {
-                using (var session = store.OpenReadSession())
+                using (var session = Store.OpenReadSession())
                 {
                     var projects = session.Query<Project>();
                     var project = session.Load<Project>("acme-13");
                     count += projects.Count;
                 }
-            }
-
-            Trace.WriteLine("Loaded: " + count);
-        }
-
-        [Test]
-        public void CanCreateAndLoadProject()
-        {
-            using (var batch = Storage.Batch())
-            {
-                for (var i = 0; i < 50; i++)
-                {
-                    var project = new Project
-                    {
-                        Id = "acme-" + i,
-                        Name = "My project 2",
-                        Description = "Foo",
-                        ScriptModule = "Write-Host 'Hello'\r\n",
-                        Steps = new List<Step> {new Step {Id = "StepABCDEFG", ScriptModule = "Hello"}}
-                    };
-
-                    batch.Put(project);
-                }
-
-                batch.Commit("Added project 1");
-            }
-
-            var watch = Stopwatch.StartNew();
-            var count = 0;
-            while (watch.ElapsedMilliseconds < 5000)
-            {
-                var reference = Storage.GetCurrentAnchor();
-                //var snapshot = Storage.LoadSnapshot(reference);
-                var projects = Storage.LoadAll<Project>(reference);
-
-                count += projects.Count;
-
-                var loaded = Storage.Load<Project>(reference, "acme-14");
-                Assert.That(loaded.Name, Is.EqualTo("My project 2"));
-                Assert.That(loaded.ScriptModule, Is.EqualTo("Write-Host 'Hello'\r\n"));
             }
 
             Trace.WriteLine("Loaded: " + count);

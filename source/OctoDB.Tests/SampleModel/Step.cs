@@ -1,10 +1,16 @@
-﻿namespace OctoDB.Tests.SampleModel
+﻿using System.Collections.Generic;
+
+namespace OctoDB.Tests.SampleModel
 {
     public class Step
     {
-        public string Id { get; set; }
+        public Step()
+        {
+            Properties = new Dictionary<string, string>();
+        }
 
-        [External("scriptModule.psm1")]
-        public string ScriptModule { get; set; }
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public Dictionary<string, string> Properties { get; set; }
     }
 }

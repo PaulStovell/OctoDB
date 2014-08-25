@@ -108,7 +108,7 @@ namespace OctoDB.Tests
 
                 Interlocked.Add(ref writes, 25);
 
-                Thread.Sleep(1000);
+                Thread.Sleep(200);
             });
         }
 

@@ -5,6 +5,6 @@ namespace OctoDB.Storage
         public object Owner { get; set; }
         public string PropertyName { get; set; }
         public object Value { get; set; }
-        public ExternalAttribute Attribute { get; set; }
+        public AttachedAttribute Attribute { get; set; }
     }
 }

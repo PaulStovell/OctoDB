@@ -46,10 +46,21 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Diagnostics\IStatistics.cs" />
+    <Compile Include="Diagnostics\Statistics.cs" />
+    <Compile Include="Diagnostics\StatisticsExtensions.cs" />
     <Compile Include="DocumentAttribute.cs" />
     <Compile Include="Storage\AttachmentFoundEvent.cs" />
-    <Compile Include="Diagnostics\PerformanceCounters.cs" />
-    <Compile Include="ExternalAttribute.cs" />
+    <Compile Include="Diagnostics\StatisticsSnapshot.cs" />
+    <Compile Include="AttachedAttribute.cs" />
+    <Compile Include="Storage\DocumentEncoder.cs" />
+    <Compile Include="Storage\DocumentSet.cs" />
+    <Compile Include="Storage\IDocumentEncoder.cs" />
+    <Compile Include="Storage\IStorageVisitor.cs" />
+    <Compile Include="Storage\LoadByIdVisitor.cs" />
+    <Compile Include="Storage\LoadByTypeVisitor.cs" />
+    <Compile Include="Storage\LoadEverythingVisitor.cs" />
+    <Compile Include="Storage\NonClosableStream.cs" />
     <Compile Include="Storage\OctoDbContractResolver.cs" />
     <Compile Include="Storage\OctoDbSerializationContext.cs" />
     <Compile Include="HistoryEntry.cs" />
@@ -58,8 +69,11 @@
     <Compile Include="Storage\IReadOnlySession.cs" />
     <Compile Include="Storage\IStorageEngine.cs" />
     <Compile Include="Storage\IWriteableSession.cs" />
+    <Compile Include="Storage\ProvideAttachmentStreamCallback.cs" />
     <Compile Include="Storage\ReadOnlySession.cs" />
+    <Compile Include="Storage\StorageBatchExtensions.cs" />
     <Compile Include="Storage\Store.cs" />
+    <Compile Include="Storage\StoredFile.cs" />
     <Compile Include="Storage\WriteableSession.cs" />
     <Compile Include="Util\IPropertyReaderWriter.cs" />
     <Compile Include="Storage\IStorageBatch.cs" />

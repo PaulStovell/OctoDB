@@ -1,26 +1,26 @@
 using System;
-using System.Collections.Generic;
 
 namespace OctoDB.Storage
 {
     public class OctoDbSerializationContext
     {
-        private readonly Func<object, string, ExternalAttribute, object> onRequestAttachment;
-        readonly List<AttachmentFoundEvent> attachments = new List<AttachmentFoundEvent>();
+        private readonly Func<object[], object, string, AttachedAttribute, object> onRequestAttachment;
+        private readonly Action<object[], object, string, object, AttachedAttribute> onNotifyAttachment;
 
-        public OctoDbSerializationContext(Func<object, string, ExternalAttribute, object> onRequestAttachment)
+        public OctoDbSerializationContext(Func<object[], object, string, AttachedAttribute, object> onRequestAttachment, Action<object[], object, string, object, AttachedAttribute> onNotifyAttachment)
         {
             this.onRequestAttachment = onRequestAttachment;
+            this.onNotifyAttachment = onNotifyAttachment;
         }
 
-        public List<AttachmentFoundEvent> Attachments
+        public object RequestAttachmentValue(object[] deserializationStack, object owner, string propertyName, AttachedAttribute attribute)
         {
-            get { return attachments; }
+            return onRequestAttachment(deserializationStack, owner, propertyName, attribute);
         }
 
-        public object RequestAttachment(object owner, string propertyName, ExternalAttribute attribute)
+        public void NotifyAttachment(object[] serializationStack, object owner, string propertyName, object value, AttachedAttribute attribute)
         {
-            return onRequestAttachment(owner, propertyName, attribute);
+            onNotifyAttachment(serializationStack, owner, propertyName, value, attribute);
         }
     }
 }

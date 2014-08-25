@@ -1,17 +1,17 @@
 using System;
-using System.Collections.Generic;
+using System.Runtime.Remoting.Activation;
+using LibGit2Sharp;
 using OctoDB.Diagnostics;
 
 namespace OctoDB.Storage
 {
     public interface IStorageEngine : IDisposable
     {
+        bool IsRepositoryEmpty { get; }
         IAnchor GetCurrentAnchor();
 
-        Dictionary<string, object> LoadSnapshot(IAnchor anchor, IAnchor previous);
-        List<T> LoadAll<T>(IAnchor anchor);
-        T Load<T>(IAnchor anchor, string id);
+        void Visit(IAnchor anchor, IStorageVisitor visitor);
+
         IStorageBatch Batch();
-        IStatistics Statistics { get; }
     }
 }
