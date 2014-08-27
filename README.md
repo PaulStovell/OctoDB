@@ -174,3 +174,11 @@ ID's are only important in OctoDB in that they are mapped to paths. Different do
    [Document("machines\{id}.json")] class Machine ...
 
 For a given document type, the same ID can be used - for example, "acme" could be used as the ID of both a project and a machine in the example above, but two projects named "acme" would not be possible. 
+
+## Implementation
+
+Internally, OctoDB uses [libgit2sharp](https://github.com/libgit2/libgit2sharp) to interact with the Git repository, and JSON.NET to serialize documents. 
+
+When reading/querying, OctoDB reads from Git trees and blobs directly, allowing different sessions to use different commits as a reference point. When committing a write session, the file system is used. Since there is only one write operation active at any one time (due to the write lock) there is no conflict. 
+
+OctoDB always commits to the `master` branch of the Git repository. 
