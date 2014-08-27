@@ -37,9 +37,11 @@ OctoDB isn't desinged to be a general purpose solution. Like any storage solutio
  - Benefit from the automatic history tracking and distributed nature of Git
  - Are only being used by one application
 
-Obviously, this means that OctoDB isn't a good solution for many scenarios. You wouldn't process transactions with it, or store customers in it. 
+Obviously, this means that OctoDB isn't a good solution for many scenarios. You wouldn't process transactions with it, or store customers for an e-commerce solution in it. 
 
 You might, however, use it to store configuration data for a build server, or configuration settings for a financial model. OctoDB is a great choice when you'd otherwise just keep all the data you need in memory forever, except for the annoying need to persist and audit changes. 
+
+If you've ever thought "Git would be a great store for this kind of information" but not wanted to litter your code with file system references, then OctoDB is a good wrapper. 
 
 ### Sessions
 
