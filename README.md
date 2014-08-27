@@ -30,7 +30,7 @@ On disk, we would have a Git repository with one commit, that adds:
     
 ### Design decisions
 
-OctoDB isn't desinged to be a general purpose solution. Like any storage solution, OctoDB makes a number of trade-offs. OctoDB is intended for data sets that: 
+OctoDB isn't meant for everyone. Like any storage solution, OctoDB makes a number of trade-offs. OctoDB is intended for data sets that: 
 
  - Are read more often than they are written
  - Can fit entirely in memory
