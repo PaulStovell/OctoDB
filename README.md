@@ -1,6 +1,6 @@
 OctoDB allows you to treat a Git repository as if it were a document store. Like a document store, it persists rich objects as JSON. 
 
-## Usage
+### Usage
 
 Given the following document type:
 
@@ -28,7 +28,7 @@ On disk, we would have a Git repository with one commit, that adds:
     projects\acme\project.json
     projects\acme\readme.md
     
-## Design decisions
+### Design decisions
 
 OctoDB isn't desinged to be a general purpose solution. Like any storage solution, OctoDB makes a number of trade-offs. OctoDB is intended for data sets that: 
 
@@ -41,7 +41,7 @@ Obviously, this means that OctoDB isn't a good solution for many scenarios. You 
 
 You might, however, use it to store configuration data for a build server, or configuration settings for a financial model. OctoDB is a great choice when you'd otherwise just keep all the data you need in memory forever, except for the annoying need to persist and audit changes. 
 
-## Sessions
+### Sessions
 
 The key unit of work in OctoDB is a session, and there are two kinds of sessions. Which one you use depends on what you plan to do during the session. 
 
@@ -50,7 +50,7 @@ The key unit of work in OctoDB is a session, and there are two kinds of sessions
 
 As suggested, read sessions can only be used to read data. Write sessions can be used to both read and write. In general, if you are building a HTTP application, a GET request would only need a read session; PUT, POST or DELETE requests would use a write session.
 
-## Write sessions
+#### Write sessions
 
 To store information in OctoDB, a write session is used (write sessions can also read data, but should only be used for reading smaller subsets of data). 
 
@@ -77,13 +77,13 @@ Write sessions support the following operations:
 
 As you would expect, sesions use an identity map to ensure a given object by ID is only ever loaded once. 
 
-## Commit anchoring
+#### Commit anchoring
 
 All sessions in OctoDB are "anchored" to a Git commit. When you open a session, the SHA of the current Git commit is captured. This SHA is then used as a reference when reading any data out of the store for the lifetime of the session. 
 
 **This means that within a session, you are guaranteed to be reading against a consistent snapshot of data.**
 
-## Read sessions
+#### Read sessions
 
 Since OctoDB assumes it works on small data sets that can fit in memory and don't change too frequently, OctoDB has explicit support for **read-only** sessions. 
 
@@ -126,7 +126,7 @@ Read sessions only support the following operations:
 
 Again, since all data is loaded up-front in a read session, these methods are only operating against an in-memory dictionary. 
 
-## Attachments
+### Attachments
 
 By default, properties on documents are persisted using JSON. The `[Document]` attribute determines the path to the document file on disk. 
 
@@ -147,7 +147,7 @@ For some properties, it might make sense to store the property value as an exter
 
 This allows you to ensure that the Git repository looks clean and that documents can be stored using the most appropriate formats for diffing. 
 
-## Concurrency
+### Concurrency
 
 At any point in time, you can have multiple read and write sessions open. The `Store` can be used to open sessions on multiple threads, though individual sessions are intended to be used from a single thread. 
 
@@ -162,7 +162,7 @@ Since read sessions use in-memory snapshots, assuming you only perform one commi
 
 As a guide, committing 3000 documents to the store takes about 30 seconds on a rMBP, most of which is in the git staging command. Loading the entire data set takes about 10 seconds. Writing a single document takes 800ms, while comparing the trees and updating the in-memory read snapshot takes 55ms. 
 
-## ID's and paths
+### ID's and paths
 
 There is currently no ID generation strategy in OctoDB - no auto-numbers, no identity fields, no HiLo; we assume ID's are assigned manually. 
 
