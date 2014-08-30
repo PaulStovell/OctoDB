@@ -9,8 +9,6 @@ Given the following document type:
     {
         public string Id { get; set; }
         public string Name { get; set; }
-        
-        [Attached("readme.md")]
         public string Description { get; set; }
     }
 
@@ -26,7 +24,6 @@ We can persist a document like this:
 On disk, we would have a Git repository with one commit, that adds:
 
     projects\acme\project.json
-    projects\acme\readme.md
     
 ### Design decisions
 
@@ -130,24 +127,41 @@ Again, since all data is loaded up-front in a read session, these methods are on
 
 ### Attachments
 
-By default, properties on documents are persisted using JSON. The `[Document]` attribute determines the path to the document file on disk. 
+OctoDB deals primarily with objects, which are serialized as JSON documents. The `[Document]` attribute determines the path to the document file on disk. 
 
-For some properties, it might make sense to store the property value as an external file separate to the JSON file. For this, the `[Attachment]` attribute can be used on the property: 
+For some data, it might make sense to store it in an external file separate to the JSON file. For this, both read and write sessions expose an `Attachments` property:
 
-    [Document(@"projects\{id}\project.json")]
-    public class Project
+    using (var session = store.OpenWriteSession()) 
     {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        
-        [Attached("readme.md")]
-        public string Description { get; set; }
-        
-        [Attached("logo.png")]
-        public byte[] LogoImage { get; set; }
+        session.Attachments.Store("readme.md", "Hello **world**");
+        session.Attachments.Store("images\\logo.png", bytes);
+        session.Commit("Added a readme and logo");
+    }
+
+    using (var session = store.OpenReadSession()) 
+    {
+        var readme = session.Attachments.LoadText("readme.md");
     }
 
 This allows you to ensure that the Git repository looks clean and that documents can be stored using the most appropriate formats for diffing. 
+
+### History
+
+As described above, all sessions are "anchored" to a Git commit. When opening a read session, you can open a read session pointing to a prior commit:
+
+    string sha;
+    using (var session = store.OpenWriteSession()) 
+    {
+        sha = session.Anchor.Id;
+        // ....
+    }
+
+    using (var session = store.OpenReadSession(sha)) 
+    {
+        // All data will be "as at" the commit given by the SHA
+    }
+
+Note: Unlike a normal read session, documents in a historical read session will be lazily loaded as they are queried (rather than all loaded at once).
 
 ### Concurrency
 
