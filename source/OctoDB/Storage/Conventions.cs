@@ -35,6 +35,16 @@ namespace OctoDB.Storage
             }
         }
 
+        public static bool IsSupported(Type type)
+        {
+            var attribute = (DocumentAttribute)type.GetCustomAttributes(typeof(DocumentAttribute), true).FirstOrDefault();
+            if (attribute == null)
+                return false;
+
+            Ensure(type);
+            return true;
+        }
+
         public static string GetParentPath(Type type)
         {
             Ensure(type);
@@ -181,7 +191,7 @@ namespace OctoDB.Storage
         {
             var attribute = (DocumentAttribute)type.GetCustomAttributes(typeof(DocumentAttribute), true).FirstOrDefault();
             if (attribute == null)
-                return;
+                throw new InvalidOperationException(string.Format("The type '{0}' is not tagged with the [Document] attribute", type.FullName));
          
             if (pathFormatStrings.ContainsKey(type))
                 return;

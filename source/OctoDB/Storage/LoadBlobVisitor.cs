@@ -4,21 +4,21 @@ using System.Linq;
 
 namespace OctoDB.Storage
 {
-    public class LoadByIdVisitor<T> : IStorageVisitor where T : class
+    public class LoadBlobVisitor : IStorageVisitor
     {
         readonly HashSet<string> pathsToLoad;
         readonly DocumentSet documents;
         readonly ICodec codec;
-        readonly List<T> loaded = new List<T>();
+        readonly Dictionary<string, byte[]> loaded = new Dictionary<string, byte[]>();
 
-        public LoadByIdVisitor(IEnumerable<string> ids, DocumentSet documents, ICodec codec)
+        public LoadBlobVisitor(IEnumerable<string> paths, DocumentSet documents, ICodec codec)
         {
-            pathsToLoad = new HashSet<string>(ids.Select(id => Conventions.GetPath(typeof (T), (string) id)), StringComparer.OrdinalIgnoreCase);
+            pathsToLoad = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
             this.documents = documents;
             this.codec = codec;
         }
 
-        public List<T> Loaded
+        public Dictionary<string, byte[]> Loaded
         {
             get { return loaded; }
         } 
@@ -33,10 +33,10 @@ namespace OctoDB.Storage
             foreach (var file in files)
             {
                 if (!pathsToLoad.Contains(file.Path)) continue;
-                var document = documents.Load(file, DecodeFile) as T;
+                var document = documents.Load(file, DecodeFile) as byte[];
                 if (document != null)
                 {
-                    loaded.Add(document);
+                    loaded.Add(file.Path, document);
                 }
             }
         }

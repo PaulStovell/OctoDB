@@ -47,6 +47,33 @@ namespace OctoDB.Storage
             }
         }
 
+        public IAnchor GetAnchor(string sha)
+        {
+            sync.EnterReadLock();
+            try
+            {
+                var tip = repository.Lookup(sha) as Commit;
+                return new GitSnapshotAnchor(tip);
+            }
+            finally
+            {
+                sync.ExitReadLock();
+            }
+        }
+
+        public List<IAnchor> GetAnchors()
+        {
+            sync.EnterReadLock();
+            try
+            {
+                return repository.Commits.Select(c => new GitSnapshotAnchor(c)).Cast<IAnchor>().ToList();
+            }
+            finally
+            {
+                sync.ExitReadLock();
+            }
+        }
+
         public void Visit(IAnchor anchor, IStorageVisitor visitorloaded)
         {
             var gitReference = anchor as GitSnapshotAnchor;
@@ -90,7 +117,7 @@ namespace OctoDB.Storage
                 where entry.TargetType == TreeEntryTargetType.Blob
                 let blob = entry.Target as Blob
                 where blob != null
-                select new StoredFile(entry.Name, entry.Path, blob.Sha, () => blob.GetContentStream(new FilteringOptions(entry.Path)))).ToList()
+                select new StoredFile(entry.Path, blob.Sha, () => blob.GetContentStream(new FilteringOptions(entry.Path)))).ToList()
                 );
         }
 
@@ -203,8 +230,6 @@ namespace OctoDB.Storage
                         parents,
                         false);
 
-                    repository.Refs.UpdateTarget(repository.Refs.Head, commit.Id);
-
                     var masterBranch = repository.Branches.FirstOrDefault(b => b.Name == "master");
                     if (masterBranch == null)
                     {
@@ -212,7 +237,7 @@ namespace OctoDB.Storage
                         repository.Checkout(masterBranch, new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
                     }
 
-                    repository.Refs.UpdateTarget(repository.Refs["refs/heads/master"], commit.Id);
+                    repository.Refs.UpdateTarget(masterBranch.CanonicalName, commit.Id.ToString());
 
                     using (statistics.MeasureGitReset())
                     {
@@ -247,6 +272,11 @@ namespace OctoDB.Storage
             public CommitSignature Author { get; private set; }
             public CommitSignature Committer { get; private set; }
             internal Commit Commit { get { return commit; } }
+
+            public override string ToString()
+            {
+                return Id + " " + Message + " (" + Author + ")";
+            }
         }
     }
 }

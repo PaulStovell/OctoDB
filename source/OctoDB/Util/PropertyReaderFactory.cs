@@ -52,7 +52,9 @@ namespace OctoDB.Util
             else
             {
                 var fieldInfo = objectType.GetField(propertyName, BindingFlags.Instance | BindingFlags.NonPublic);
-                if (fieldInfo == null) return null;
+                if (fieldInfo == null) 
+                    throw new InvalidOperationException(string.Format("The type '{0}' does not define a property or field named '{1}'", objectType.FullName, propertyName));
+
                 if (!typeof(TCast).IsAssignableFrom(fieldInfo.FieldType))
                 {
                     throw new InvalidOperationException(string.Format("Field type '{0}' for field '{1}.{2}' cannot be converted to type '{3}", fieldInfo.FieldType, fieldInfo.DeclaringType == null ? "??" : fieldInfo.DeclaringType.Name, fieldInfo.Name, typeof(TCast).Name));

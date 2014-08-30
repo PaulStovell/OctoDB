@@ -3,13 +3,11 @@ using System.Diagnostics;
 using System.IO;
 using NUnit.Framework;
 using OctoDB.Diagnostics;
-using OctoDB.Storage;
 
 namespace OctoDB.Tests.Fixtures
 {
     public class StorageFixture
     {
-        protected IStorageEngine Storage { get; set; }
         protected Store Store { get; set; }
 
         [SetUp]
@@ -19,7 +17,6 @@ namespace OctoDB.Tests.Fixtures
             EnsurePath(path);
 
             Store = new Store(path);
-            Storage = Store.StorageEngine;
         }
 
         [TearDown]
@@ -27,10 +24,7 @@ namespace OctoDB.Tests.Fixtures
         {
             Store.Statistics.Print();
 
-            if (Storage != null)
-            {
-                Storage.Dispose();
-            }
+            Store.Dispose();
         }
 
         static void EnsurePath(string path)

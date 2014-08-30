@@ -1,16 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Text;
 
 namespace OctoDB.Storage
 {
-    public interface IReadSession : IDisposable
-    {
-        IReadAttachments Attachments { get; }
-        IAnchor Anchor { get; }
-        T Load<T>(string id) where T : class;
-        ReadOnlyCollection<T> Query<T>();
-    }
-
     public class ReadSession : IReadSession, IReadAttachments
     {
         readonly IAnchor anchor;
@@ -33,7 +26,7 @@ namespace OctoDB.Storage
             return documents.Get(path) as T;
         }
 
-        public ReadOnlyCollection<T> Query<T>()
+        public ReadOnlyCollection<T> Query<T>() where T : class
         {
             return new ReadOnlyCollection<T>(documents.GetAll<T>());
         }
@@ -46,9 +39,16 @@ namespace OctoDB.Storage
             }
         }
 
-        public byte[] Load(string path)
+        byte[] IReadAttachments.LoadBinary(string path)
         {
             return (byte[])documents.Get(path);
+        }
+
+        string IReadAttachments.LoadText(string path, Encoding encoding = null)
+        {
+            encoding = encoding ?? Encoding.UTF8;
+            var bytes = ((IReadAttachments)this).LoadBinary(path);
+            return encoding.GetString(bytes);
         }
     }
 }

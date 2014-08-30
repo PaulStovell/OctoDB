@@ -1,16 +1,19 @@
 using System.Collections.Generic;
+using System.IO;
 
 namespace OctoDB.Storage
 {
     public class LoadByTypeVisitor<T> : IStorageVisitor where T : class
     {
         readonly DocumentSet documents;
+        readonly ICodec codec;
         readonly List<T> loaded = new List<T>();
         readonly string parentPath;
 
-        public LoadByTypeVisitor(DocumentSet documents)
+        public LoadByTypeVisitor(DocumentSet documents, ICodec codec)
         {
             this.documents = documents;
+            this.codec = codec;
             parentPath = Conventions.GetParentPath(typeof (T));
         }
 
@@ -30,13 +33,18 @@ namespace OctoDB.Storage
             {
                 if (Conventions.GetType(file.Path) == typeof (T))
                 {
-                    var document = documents.Load(file) as T;
+                    var document = documents.Load(file, DecodeFile) as T;
                     if (document != null)
                     {
                         loaded.Add(document);
                     }
                 }
             }
+        }
+
+        object DecodeFile(StoredFile file)
+        {
+            return codec.Decode(file.Path, file.GetContents());
         }
     }
 }

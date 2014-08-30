@@ -15,6 +15,11 @@ namespace OctoDB.Diagnostics
             statistics.Increment("Read sessions created");
         }
 
+        public static void IncrementHistoricalReadSessionsOpened(this IStatistics statistics)
+        {
+            statistics.Increment("Historical read sessions created");
+        }
+
         public static void IncrementWriteSessionsOpened(this IStatistics statistics)
         {
             statistics.Increment("Write sessions created");
@@ -23,6 +28,11 @@ namespace OctoDB.Diagnostics
         public static void IncrementReadSessionsClosed(this IStatistics statistics)
         {
             statistics.Increment("Read sessions disposed");
+        }
+
+        public static void IncrementHistoricalReadSessionsClosed(this IStatistics statistics)
+        {
+            statistics.Increment("Historical read sessions disposed");
         }
 
         public static void IncrementWriteSessionsClosed(this IStatistics statistics)
@@ -58,11 +68,6 @@ namespace OctoDB.Diagnostics
         public static IDisposable MeasureDeserialization(this IStatistics statistics)
         {
             return statistics.Measure("Deserialization");
-        }
-
-        public static IDisposable MeasureAttachments(this IStatistics statistics)
-        {
-            return statistics.Measure("Attachments");
         }
 
         public static IDisposable MeasureGitStaging(this IStatistics statistics)

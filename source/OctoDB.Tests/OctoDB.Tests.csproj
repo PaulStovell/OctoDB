@@ -54,6 +54,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Concurrency.cs" />
+    <Compile Include="EdgeCases.cs" />
     <Compile Include="Fixtures\IdentityPathsFixture.cs" />
     <Compile Include="Fixtures\StorageFixture.cs" />
     <Compile Include="Usage.cs" />
