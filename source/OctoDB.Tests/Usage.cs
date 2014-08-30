@@ -1,12 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using LibGit2Sharp;
 using NUnit.Framework;
-using OctoDB.Diagnostics;
 using OctoDB.Storage;
 using OctoDB.Tests.Fixtures;
 using OctoDB.Tests.SampleModel;
@@ -17,140 +15,86 @@ namespace OctoDB.Tests
     public class Usage : StorageFixture
     {
         [Test]
-        public void CreateSampleDataSet()
+        public void WriteSession_CanStoreAndLoadById()
         {
-            var createWatch = Stopwatch.StartNew();
             using (var session = Store.OpenWriteSession())
             {
-                //for (var i = 0; i < 300; i++)
-                //{
-                //    session.Store(new Project { Id = "acme-" + i, Name = "ACME " + i, Description = "My **best** project" });
-                //    session.Store(new DeploymentProcess { Id = "acme-" + i, Steps = new List<Step>
-                //    {
-                //        new Step { Name = "Step 1", Id = Guid.NewGuid().ToString(), Properties =
-                //        {
-                //            { "Foo.Bar", "Hello" },
-                //            { "Foo.Baz", "Bye!" },
-                //        }}
-                //    } });
-                //    session.Store(new VariableSet { Id = "acme-" + i, Variables =
-                //    {
-                //        { "DatabaseName", "MyDB" },
-                //        { "ConnectionString", "Server=(local);Database=#{DatabaseName};trusted_Connection=true" },
-                //    } });
-                //}
-
-                //for (var i = 0; i < 100; i++)
-                //{
-                //    session.Store(new DeploymentEnvironment { Id = "env-" + i, Name = "Environment " + i });
-                //}
-
-                for (var i = 0; i < 2000; i++)
-                {
-                    session.Store(new Machine { Name = "Machine " + i, Properties =
-                    {
-                        { "Url", "https://localhost:8080/" }
-                    }});
-                }
-
-                session.Commit("Create initial data set");
+                session.Store(new Project { Id = "acme", Name = "ACME Web" });
+                session.Commit("Added a project");
             }
-
-            Console.WriteLine("Create took: " + createWatch.ElapsedMilliseconds + "ms");
-
-            createWatch.Restart();
-            Store.Statistics.Print();
-            Store.Statistics.SnapshotAndReset();
-
-            using (var session = Store.OpenReadSession())
-            {
-                
-            }
-
-            Console.WriteLine("Read: " + createWatch.ElapsedMilliseconds + "ms");
-
-            createWatch.Restart();
-
-            Store.Statistics.Print();
-            Store.Statistics.SnapshotAndReset();
-
-            using (var session = Store.OpenReadSession())
-            {
-
-            }
-
-            Console.WriteLine("Read again: " + createWatch.ElapsedMilliseconds + "ms");
-
-            createWatch.Restart();
 
             using (var session = Store.OpenWriteSession())
             {
-                session.Store(new Project { Id = "bam" });
-                session.Commit("Added another project");
+                var project = session.Load<Project>("acme");
+                Assert.That(project.Name, Is.EqualTo("ACME Web"));
             }
-
-            Console.WriteLine("Write one document: " + createWatch.ElapsedMilliseconds + "ms");
-
-            createWatch.Restart();
-
-            using (var session = Store.OpenReadSession())
-            {
-
-            }
-
-            Console.WriteLine("Read again: " + createWatch.ElapsedMilliseconds + "ms");
         }
 
         [Test]
-        public void NoChanges()
+        public void WriteSession_CanQuery()
         {
             using (var session = Store.OpenWriteSession())
             {
-                session.Store(new Project { Id = "bam" });
-                session.Commit("Added another project");
+                session.Store(new Project { Id = "acme-1", Name = "ACME 1" });
+                session.Store(new Project { Id = "acme-2", Name = "ACME 2" });
+                session.Commit("Added projects");
             }
 
             using (var session = Store.OpenWriteSession())
             {
-                session.Store(new Project { Id = "bam" });
-                session.Commit("Added another project");
+                var projects = session.Query<Project>();
+                Assert.That(projects.Count, Is.EqualTo(2));
+                Assert.That(projects[0].Name, Is.EqualTo("ACME 1"));
+                Assert.That(projects[1].Name, Is.EqualTo("ACME 2"));
+            }
+        }
+
+        [Test]
+        public void WriteSession_CanDelete()
+        {
+            using (var session = Store.OpenWriteSession())
+            {
+                session.Store(new Project { Id = "acme", Name = "ACME Web" });
+                session.Commit("Added a project");
+            }
+
+            using (var session = Store.OpenWriteSession())
+            {
+                var project = session.Load<Project>("acme");
+                Assert.That(project, Is.Not.Null);
+                session.Delete(project);
+                session.Commit("Deleted a project");
+            }
+
+            using (var session = Store.OpenWriteSession())
+            {
+                var project = session.Load<Project>("acme");
+                Assert.That(project, Is.Null);
+
+                var projects = session.Query<Project>();
+                Assert.That(projects.Count, Is.EqualTo(0));
             }
         }
 
         [Test]
         public void ReadOnlySessionsReuseInstances()
         {
-            if (Store.StorageEngine.IsRepositoryEmpty)
-            {
-                using (var batch = Store.StorageEngine.Batch())
-                {
-                    //batch.PutText(".gitattributes", "* text=auto");
-                    batch.PutText("readme.md", "Hello **world**!");
-                    batch.Commit("Initialize empty repository");
-                }
-            }
-
             using (var session = Store.OpenWriteSession())
             {
-                session.Store(new Project { Id = "acme-1", Description = "A", ScriptModule = "write-host 'hi'\r\n" });
+                session.Store(new Project { Id = "acme-1", Description = "A" });
                 session.Commit("Added project 1");
             }
 
             Project projectA;
             using (var session = Store.OpenReadSession())
-            {
                 projectA = session.Load<Project>("acme-1");
-            }
-
+            
             Project projectB;
             using (var session = Store.OpenReadSession())
-            {
                 projectB = session.Load<Project>("acme-1");
-            }
-
+            
             Assert.AreEqual(projectA, projectB);
             Assert.That(projectB.Description, Is.EqualTo("A"));
-            Assert.That(projectB.ScriptModule, Is.EqualTo("write-host 'hi'\r\n"));
 
             using (var session = Store.OpenWriteSession())
             {
@@ -162,12 +106,53 @@ namespace OctoDB.Tests
             
             Project projectC;
             using (var session = Store.OpenReadSession())
-            {
                 projectC = session.Load<Project>("acme-1");
-            }
 
             Assert.AreNotEqual(projectC, projectB);
             Assert.That(projectC.Description, Is.EqualTo("B"));
+        }
+
+        [Test]
+        public void CanStoreAttachments()
+        {
+            using (var session = Store.OpenWriteSession())
+            {
+                session.Attachments.Store("foo\\bar\\baz.bin", new byte[] { 42, 43, 44 });
+                session.Attachments.Store("foo\\hello.md", "Hello **world**!\r\n");
+                session.Commit("Added attachments");
+            }
+
+            // Attachments are loaded into memory for read sessions
+            using (var session = Store.OpenReadSession())
+            {
+                var bytes = session.Attachments.Load("foo\\bar\\baz.bin");
+                Assert.That(bytes.Length, Is.EqualTo(3));
+                Assert.That(bytes[0], Is.EqualTo(42));
+                Assert.That(bytes[1], Is.EqualTo(43));
+                Assert.That(bytes[2], Is.EqualTo(44));
+
+                var text = session.Attachments.LoadText("foo\\hello.md");
+                Assert.That(text, Is.EqualTo("Hello **world**!\r\n"));
+            }
+
+            // And also available in write sessions
+            using (var session = Store.OpenWriteSession())
+            {
+                var bytes = session.Attachments.Load("foo\\bar\\baz.bin");
+                Assert.That(bytes.Length, Is.EqualTo(3));
+            }
+
+            using (var session = Store.OpenWriteSession())
+            {
+                session.Attachments.Delete("foo\\bar\\baz.bin");
+                session.Commit("Deleted an attachment");
+            }
+
+            using (var session = Store.OpenWriteSession())
+            {
+                var bytes = session.Attachments.Load("foo\\bar\\baz.bin");
+                Assert.That(bytes, Is.Null);
+            }
         }
 
         [Test]
@@ -181,8 +166,7 @@ namespace OctoDB.Tests
                     {
                         Id = "acme-" + i,
                         Name = "My project 2",
-                        Description = "Foo",
-                        ScriptModule = "Write-Host 'Hello'\r\n"
+                        Description = "Foo"
                     };
 
                     session.Store(project);

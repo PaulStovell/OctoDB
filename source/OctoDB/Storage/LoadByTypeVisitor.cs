@@ -28,9 +28,9 @@ namespace OctoDB.Storage
         {
             foreach (var file in files)
             {
-                if (Conventions.GetType(path) == typeof (T))
+                if (Conventions.GetType(file.Path) == typeof (T))
                 {
-                    var document = documents.Load(file, files) as T;
+                    var document = documents.Load(file) as T;
                     if (document != null)
                     {
                         loaded.Add(document);

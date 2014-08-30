@@ -7,11 +7,7 @@ namespace OctoDB.Tests.SampleModel
     {
         public string Id { get; set; }
         public string Name { get; set; }
-        [Attached("readme.md")]
         public string Description { get; set; }
-
-        [Attached(@"scriptModule.psm1")]
-        public string ScriptModule { get; set; }
     }
 
     [Document(@"projects\{id}\process.json")]
@@ -59,8 +55,5 @@ namespace OctoDB.Tests.SampleModel
         public string Id { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
-
-        [Attached("module.psm1")]
-        public string Module { get; set; }
     }
 }

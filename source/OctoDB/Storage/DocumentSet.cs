@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 
@@ -30,10 +31,6 @@ namespace OctoDB.Storage
         void BeforeCommit(IStorageBatch batch, ExtensionContext context);
         void AfterCommit(ExtensionContext context);
     }
-
-    // {
-    //   'Project': 100,
-    //   'Environment: 50,
 
     [Document("meta\\{id}.json")]
     public class IdentityAllocations
@@ -154,7 +151,7 @@ namespace OctoDB.Storage
             }
         }
 
-        public object Load(StoredFile file, IEnumerable<StoredFile> filesInDirectory)
+        public object Load(StoredFile file)
         {
             sync.EnterUpgradeableReadLock();
 
@@ -169,22 +166,23 @@ namespace OctoDB.Storage
                 sync.EnterWriteLock();
                 try
                 {
+                    object read;
                     var type = Conventions.GetType(file.Path);
                     if (type == null)
-                        return null;
-
-                    var read = encoder.Read(file.GetContents(), Conventions.GetType(file.Path), (attachmentKey, attachmentReader) =>
                     {
-                        var attachment = filesInDirectory.FirstOrDefault(f => f.Name == attachmentKey);
-                        if (attachment != null)
-                        {
-                            attachmentReader(attachment.GetContents());
-                        }
-                    });
+                        var contents = file.GetContents();
+                        var buffer = new MemoryStream();
+                        contents.CopyTo(buffer);
+                        buffer.Seek(0, SeekOrigin.Begin);
+                        read = buffer.ToArray();
+                    }
+                    else
+                    {
+                        read = encoder.Read(file.GetContents(), Conventions.GetType(file.Path));
+                    }
 
                     documentsByPath[file.Path] = read;
                     documentShas[file.Path] = file.Sha;
-
                     return read;
                 }
                 finally
@@ -195,6 +193,20 @@ namespace OctoDB.Storage
             finally
             {
                 sync.ExitUpgradeableReadLock();
+            }
+        }
+
+        public void Add(string path, byte[] contents)
+        {
+            sync.EnterWriteLock();
+            try
+            {
+                documentsByPath[path] = contents;
+                documentShas[path] = null;
+            }
+            finally
+            {
+                sync.ExitWriteLock();
             }
         }
 

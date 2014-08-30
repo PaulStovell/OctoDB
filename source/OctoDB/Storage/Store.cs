@@ -23,7 +23,7 @@ namespace OctoDB.Storage
 
         public IStatistics Statistics { get { return statistics; } }
 
-        public ReadOnlySession OpenReadSession()
+        public IReadSession OpenReadSession()
         {
             statistics.IncrementReadSessionsOpened();
 
@@ -34,7 +34,7 @@ namespace OctoDB.Storage
                 if (lastReadSnapshot != null && lastReadSnapshot.Anchor.Id == anchor.Id)
                 {
                     statistics.IncrementSnapshotReuse();
-                    return new ReadOnlySession(anchor, lastReadSnapshot, DisposeReadSession);
+                    return new ReadSession(anchor, lastReadSnapshot, DisposeReadSession);
                 }
 
                 statistics.IncrementSnapshotRebuild();
@@ -55,7 +55,7 @@ namespace OctoDB.Storage
                     documents.RemoveExcept(visited);
                 }
 
-                return new ReadOnlySession(anchor, documents, DisposeReadSession);
+                return new ReadSession(anchor, documents, DisposeReadSession);
             }
         }
 

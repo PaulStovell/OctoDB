@@ -97,8 +97,7 @@ namespace OctoDB.Tests
                         {
                             Id = i.ToString(),
                             Name = "Project " + i,
-                            Description = "Special project " + i,
-                            ScriptModule = "Write-Host 'Hello " + i + "!'\r\n"
+                            Description = "Special project " + i
                         };
                         session.Store(project);
                     }

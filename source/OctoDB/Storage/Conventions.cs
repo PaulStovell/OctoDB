@@ -23,6 +23,10 @@ namespace OctoDB.Storage
             sync.EnterReadLock();
             try
             {
+                if (!pathFormatStrings.ContainsKey(type))
+                {
+                    return null;
+                }
                 return string.Format(pathFormatStrings[type], id);
             }
             finally
@@ -38,6 +42,11 @@ namespace OctoDB.Storage
             sync.EnterReadLock();
             try
             {
+                if (!pathFormatStrings.ContainsKey(type))
+                {
+                    return null;
+                }
+
                 var format = pathFormatStrings[type];
                 return format.Substring(0, format.IndexOf("{0}") - 1);
             }

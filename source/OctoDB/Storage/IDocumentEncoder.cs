@@ -8,8 +8,8 @@ namespace OctoDB.Storage
     {
         JsonSerializerSettings SerializerSettings { get; }
         
-        object Read(Stream stream, Type type, ProvideAttachmentStreamCallback provideAttachment);
+        object Read(Stream stream, Type type);
 
-        void Write(Stream stream, object document, Type type, ProvideAttachmentStreamCallback provideAttachment);
+        void Write(Stream stream, object document, Type type);
     }
 }

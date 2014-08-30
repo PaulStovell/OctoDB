@@ -1,12 +1,36 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using OctoDB.Diagnostics;
 
 namespace OctoDB.Storage
 {
-    public class WriteableSession : IWriteableSession
+    public interface IReadAttachments
+    {
+        byte[] Load(string path);
+    }
+
+    public static class AttachmentExtensions
+    {
+        public static string LoadText(this IReadAttachments attachments, string path, Encoding encoding = null)
+        {
+            encoding = encoding ?? Encoding.UTF8;
+            var bytes = attachments.Load(path);
+            return encoding.GetString(bytes);
+        }
+    }
+
+    public interface IWriteAttachments : IReadAttachments
+    {
+        void Store(string path, byte[] contents);
+        void Store(string path, string contents, Encoding encoding = null);
+        void Delete(string path);
+    }
+
+    public class WriteableSession : IWriteableSession, IWriteAttachments
     {
         readonly IStorageEngine storage;
         readonly IStatistics statistics;
@@ -15,8 +39,8 @@ namespace OctoDB.Storage
         readonly List<IWriteSessionExtension> extensions;
         readonly Action disposed;
         readonly DocumentSet documents;
-        readonly HashSet<object> pendingStores = new HashSet<object>();
-        readonly HashSet<object> pendingDeletes = new HashSet<object>();
+        readonly Dictionary<string, object> pendingStores = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        readonly HashSet<string> pendingDeletes = new HashSet<string>();
         readonly IStorageBatch batch;
 
         public WriteableSession(IStorageEngine storage, IStatistics statistics, IDocumentEncoder encoder, IAnchor anchor, List<IWriteSessionExtension> extensions, Action disposed)
@@ -33,6 +57,8 @@ namespace OctoDB.Storage
 
             batch = storage.Batch();
         }
+
+        public IWriteAttachments Attachments { get { return this; } }
 
         public T Load<T>(string id) where T : class
         {
@@ -60,15 +86,20 @@ namespace OctoDB.Storage
         {
             CallExtensions((ext, ctx) => ext.BeforeStore(item, ctx));
 
+            var path = Conventions.GetPath(item);
             documents.Add(item);
-            pendingStores.Add(item);
+            pendingStores[path] = item;
 
             CallExtensions((ext, ctx) => ext.AfterStore(item, ctx));
         }
 
         public void Delete(object item)
         {
-            pendingDeletes.Add(item);
+            if (item == null)
+                return;
+
+            var path = Conventions.GetPath(item);
+            pendingDeletes.Add(path);
         }
 
         public void Commit(string message)
@@ -77,31 +108,32 @@ namespace OctoDB.Storage
 
             foreach (var delete in pendingDeletes)
             {
-                var path = Conventions.GetPath(delete);
-                batch.Delete(path);
+                batch.Delete(delete);
 
                 statistics.IncrementDeleted();
             }
 
             foreach (var store in pendingStores)
             {
-                var document = store;
-                var path = Conventions.GetPath(document);
+                var document = store.Value;
 
                 statistics.IncrementStored();
 
-                batch.Put(path, stream => encoder.Write(stream, document, document.GetType(), (attachmentKey, attachmentWriter) =>
+                if (document is byte[])
                 {
-                    var attachmentPath = attachmentKey;
-                    var parentDirectory = Path.GetDirectoryName(path);
-                    if (parentDirectory != null)
+                    batch.Put(store.Key, stream =>
                     {
-                        attachmentPath = Path.Combine(parentDirectory, attachmentKey);
-                    }
-
-                    // ReSharper disable once AccessToDisposedClosure
-                    batch.Put(attachmentPath, attachmentWriter);                     
-                }));
+                        using (var writer = new BinaryWriter(stream))
+                        {
+                            writer.Write((byte[]) document);
+                            writer.Flush();
+                        }
+                    });
+                }
+                else
+                {
+                    batch.Put(store.Key, stream => encoder.Write(stream, document, document.GetType()));
+                }
             }
 
             batch.Commit(message);
@@ -120,6 +152,36 @@ namespace OctoDB.Storage
         {
             batch.Dispose();
             if (disposed != null) disposed();
+        }
+
+        void IWriteAttachments.Store(string path, byte[] contents)
+        {
+            pendingStores[path] = contents;
+            documents.Add(path, contents);
+        }
+
+        void IWriteAttachments.Store(string path, string contents, Encoding encoding = null)
+        {
+            encoding = encoding ?? Encoding.UTF8;
+            var bytes = encoding.GetBytes(contents);
+            ((IWriteAttachments)this).Store(path, bytes);
+        }
+
+        void IWriteAttachments.Delete(string path)
+        {
+            pendingDeletes.Add(path);
+        }
+
+        byte[] IReadAttachments.Load(string path)
+        {
+            var visitor = new LoadBlobVisitor(new List<string> { path }, documents);
+            storage.Visit(anchor, visitor);
+
+            if (visitor.Loaded.ContainsKey(path))
+            {
+                return visitor.Loaded[path];
+            }
+            return null;
         }
     }
 }

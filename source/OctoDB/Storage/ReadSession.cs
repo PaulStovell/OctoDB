@@ -3,7 +3,15 @@ using System.Collections.ObjectModel;
 
 namespace OctoDB.Storage
 {
-    public class ReadSession : IDisposable
+    public interface IReadSession : IDisposable
+    {
+        IReadAttachments Attachments { get; }
+        IAnchor Anchor { get; }
+        T Load<T>(string id) where T : class;
+        ReadOnlyCollection<T> Query<T>();
+    }
+
+    public class ReadSession : IReadSession, IReadAttachments
     {
         readonly IAnchor anchor;
         readonly DocumentSet documents;
@@ -16,6 +24,7 @@ namespace OctoDB.Storage
             this.disposed = disposed;
         }
 
+        public IReadAttachments Attachments { get { return this; } }
         public IAnchor Anchor { get { return anchor; } }
 
         public T Load<T>(string id) where T : class
@@ -36,10 +45,10 @@ namespace OctoDB.Storage
                 disposed();
             }
         }
-    }
 
-    public class ReadOnlyAttachments
-    {
-        
+        public byte[] Load(string path)
+        {
+            return (byte[])documents.Get(path);
+        }
     }
 }

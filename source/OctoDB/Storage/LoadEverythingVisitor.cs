@@ -23,7 +23,7 @@ namespace OctoDB.Storage
             foreach (var file in files)
             {
                 visited.Add(file.Path);
-                set.Load(file, files);
+                set.Load(file);
             }
         }
     }

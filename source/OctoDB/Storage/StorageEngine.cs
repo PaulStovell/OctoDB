@@ -12,7 +12,7 @@ namespace OctoDB.Storage
     public class StorageEngine : IStorageEngine
     {
         readonly Repository repository;
-        readonly ReaderWriterLockSlim sync = new ReaderWriterLockSlim();
+        readonly ReaderWriterLockSlim sync = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         readonly IStatistics statistics;
         
         public StorageEngine(string rootPath, IStatistics statistics)
