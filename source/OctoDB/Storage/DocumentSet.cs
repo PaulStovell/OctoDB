@@ -1,10 +1,109 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
 namespace OctoDB.Storage
 {
+    public class ExtensionContext
+    {
+        public ExtensionContext(IWriteableSession session, IAnchor anchor, IStorageEngine engine)
+        {
+            Session = session;
+            Anchor = anchor;
+            Engine = engine;
+        }
+
+        public IWriteableSession Session { get; private set; }
+        public IAnchor Anchor { get; private set; }
+        public IStorageEngine Engine { get; private set; }
+    }
+
+    public interface IWriteSessionExtension
+    {
+        void AfterOpen(ExtensionContext context);
+        void BeforeStore(object document, ExtensionContext context);
+        void AfterStore(object document, ExtensionContext context);
+        void BeforeDelete(object document, ExtensionContext context);
+        void AfterDelete(object document, ExtensionContext context);
+        void BeforeCommit(IStorageBatch batch, ExtensionContext context);
+        void AfterCommit(ExtensionContext context);
+    }
+
+    // {
+    //   'Project': 100,
+    //   'Environment: 50,
+
+    [Document("meta\\{id}.json")]
+    public class IdentityAllocations
+    {
+        public IdentityAllocations()
+        {
+            NextIdentity = new ConcurrentDictionary<string, int>();
+        }
+
+        public string Id { get; set; }
+
+        public ConcurrentDictionary<string, int> NextIdentity { get; private set; }
+
+        public int Next(string collection)
+        {
+            return NextIdentity.AddOrUpdate(collection, c => 1, (c, i) => i + 1);
+        }
+    }
+
+    public class LinearChunkIdentityGenerator : IWriteSessionExtension
+    {
+        static IdentityAllocations allocations; 
+
+        public void AfterOpen(ExtensionContext context)
+        {
+            if (allocations == null)
+            {
+                allocations = context.Session.Load<IdentityAllocations>("ids") ?? new IdentityAllocations { Id = "ids" };
+            }
+        }
+
+        public void BeforeStore(object document, ExtensionContext context)
+        {
+            object currentId = Conventions.GetId(document);
+
+            if (currentId == null || (currentId is int && (int)currentId == 0))
+            {
+                var type = document.GetType().Name;
+                currentId = allocations.Next(type);
+
+                Conventions.AssignId(document, currentId);
+
+                context.Session.Store(allocations);
+            }
+        }
+
+        public void AfterStore(object document, ExtensionContext context)
+        {
+
+        }
+
+        public void BeforeDelete(object document, ExtensionContext context)
+        {
+
+        }
+
+        public void AfterDelete(object document, ExtensionContext context)
+        {
+
+        }
+
+        public void BeforeCommit(IStorageBatch batch, ExtensionContext context)
+        {
+        }
+
+        public void AfterCommit(ExtensionContext context)
+        {
+        }
+    }
+
     public class DocumentSet
     {
         readonly IDocumentEncoder encoder;
@@ -107,12 +206,13 @@ namespace OctoDB.Storage
                 if (o == null) return;
 
                 var id = Conventions.GetId(o);
-                if (id == null || string.IsNullOrWhiteSpace(id))
+                if (id == null)
                     throw new ArgumentException(string.Format("An ID must be assigned to this {0}", o.GetType()));
 
                 var path = Conventions.GetPath(o.GetType(), o);
 
-                if (documentsByPath.ContainsKey(id))
+                object existing;
+                if (documentsByPath.TryGetValue(path, out existing) && existing != o)
                     throw new Exception(string.Format("An object with ID {0} already exists in this session", id));
 
                 documentsByPath[path] = o;
@@ -130,11 +230,11 @@ namespace OctoDB.Storage
             try
             {
                 var id = Conventions.GetId(o);
-                if (id == null || string.IsNullOrWhiteSpace(id))
+                if (id == null)
                     throw new ArgumentException(string.Format("An ID must be assigned to this {0}", o.GetType()));
 
                 var path = Conventions.GetPath(o.GetType(), o);
-                if (documentsByPath.ContainsKey(id))
+                if (documentsByPath.ContainsKey(path))
                 {
                     documentsByPath.Remove(path);
                     documentShas.Remove(path);

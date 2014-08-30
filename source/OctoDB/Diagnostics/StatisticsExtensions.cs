@@ -84,6 +84,9 @@ namespace OctoDB.Diagnostics
         {
             var snapshot = statistics.SnapshotAndReset();
 
+            if (snapshot.Counts.Count + snapshot.Timings.Count == 0)
+                return;
+
             var keyLength = snapshot.Counts.Keys.Concat(snapshot.Timings.Keys).Max(m => m.Length) + 10;
 
             foreach (var stat in snapshot.Counts.OrderBy(o => o.Key))

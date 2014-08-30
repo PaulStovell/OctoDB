@@ -3,13 +3,13 @@ using System.Collections.ObjectModel;
 
 namespace OctoDB.Storage
 {
-    public class ReadOnlySession : IDisposable
+    public class ReadSession : IDisposable
     {
         readonly IAnchor anchor;
         readonly DocumentSet documents;
         readonly Action disposed;
 
-        public ReadOnlySession(IAnchor anchor, DocumentSet documents, Action disposed)
+        public ReadSession(IAnchor anchor, DocumentSet documents, Action disposed)
         {
             this.anchor = anchor;
             this.documents = documents;
@@ -36,5 +36,10 @@ namespace OctoDB.Storage
                 disposed();
             }
         }
+    }
+
+    public class ReadOnlyAttachments
+    {
+        
     }
 }

@@ -67,6 +67,7 @@ namespace OctoDB.Diagnostics
             {
                 var snapshot = Snapshot();
                 counts.Clear();
+                timings.Clear();
                 return snapshot;
             }
         }

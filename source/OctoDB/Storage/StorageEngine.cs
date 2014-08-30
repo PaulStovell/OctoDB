@@ -14,12 +14,11 @@ namespace OctoDB.Storage
         readonly Repository repository;
         readonly ReaderWriterLockSlim sync = new ReaderWriterLockSlim();
         readonly IStatistics statistics;
-
+        
         public StorageEngine(string rootPath, IStatistics statistics)
         {
             this.statistics = statistics;
             Repository.Init(rootPath);
-
             repository = new Repository(rootPath);
         }
 
@@ -29,15 +28,8 @@ namespace OctoDB.Storage
         {
             get
             {
-                sync.EnterReadLock();
-                try
-                {
-                    return repository.Head.Tip == null;
-                }
-                finally
-                {
-                    sync.ExitReadLock();
-                }
+                var anchor = GetCurrentAnchor();
+                return anchor.Id == null;
             }
         }
 
@@ -147,41 +139,44 @@ namespace OctoDB.Storage
 
             public void Prepare()
             {
+                parent = repository.Head.Tip;
+                if (parent == null)
+                {
+                    treeDefinition = new TreeDefinition();
+                }
+                else
+                {
+                    treeDefinition = TreeDefinition.From(parent.Tree);
+                }
+
                 GitReset();
             }
 
             void GitReset()
             {
-                if (repository.Head.Tip != null)
-                {
-                    using (statistics.MeasureGitReset())
-                    {
-                        repository.Reset(ResetMode.Hard);
-                    }
-                }
+                //if (repository.Head.Tip != null)
+                //{
+                //    using (statistics.MeasureGitReset())
+                //    {
+                //        repository.Reset(ResetMode.Hard);
+                //    }
+                //}
             }
 
             public void Put(string path, Action<Stream> streamWriter)
             {
-                var root = repository.Info.WorkingDirectory;
-                var parentDirectory = Path.GetDirectoryName(path);
-                var parentPath = root;
-                if (parentDirectory != null)
+                using (var stream = new MemoryStream())
                 {
-                    parentPath = Path.Combine(root, parentDirectory);
-                }
+                    streamWriter(new NonClosableStream(stream));
 
-                if (!Directory.Exists(parentPath))
-                {
-                    Directory.CreateDirectory(parentPath);
-                }
+                    using (statistics.MeasureGitStaging())
+                    {
+                        stream.Seek(0, SeekOrigin.Begin);
+                        var blob = repository.ObjectDatabase.CreateBlob(stream, path);
 
-                var fullPath = Path.Combine(root, path);
-                using (var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write))
-                {
-                    streamWriter(stream);
+                        treeDefinition.Add(path, blob, Mode.NonExecutableFile);
+                    }
                 }
-                pendingStages.Add(fullPath);
             }
 
             public void Delete(string path)
@@ -194,36 +189,36 @@ namespace OctoDB.Storage
 
             public void Commit(string message)
             {
-                if (pendingDeletes.Count + pendingStages.Count == 0)
-                {
-                    return;
-                }
-
-                using (statistics.MeasureGitStaging())
-                {
-                    if (pendingDeletes.Count > 0)
-                    {
-                        repository.Index.Remove(pendingDeletes);                        
-                    }
-                    if (pendingStages.Count > 0)
-                    {
-                        repository.Index.Stage(pendingStages);                        
-                    }
-                }
-
                 using (statistics.MeasureGitCommit())
                 {
-                    try
+                    var tree = repository.ObjectDatabase.CreateTree(treeDefinition);
+
+                    var parents = parent == null ? new Commit[0] : new[] { parent };
+
+                    var commit = repository.ObjectDatabase.CreateCommit(
+                        new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
+                        new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
+                        message,
+                        tree,
+                        parents,
+                        false);
+
+                    repository.Refs.UpdateTarget(repository.Refs.Head, commit.Id);
+
+                    var masterBranch = repository.Branches.FirstOrDefault(b => b.Name == "master");
+                    if (masterBranch == null)
                     {
-                        repository.Commit(message, new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow));
+                        masterBranch = repository.CreateBranch("master", commit);
+                        repository.Checkout(masterBranch, new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
                     }
-                    catch (EmptyCommitException)
+
+                    repository.Refs.UpdateTarget(repository.Refs["refs/heads/master"], commit.Id);
+
+                    using (statistics.MeasureGitReset())
                     {
-                        
+                        repository.Reset(ResetMode.Hard, commit);
                     }
                 }
-
-                GitReset();
             }
 
             public void Dispose()

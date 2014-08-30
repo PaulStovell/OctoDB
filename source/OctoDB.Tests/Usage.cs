@@ -1,7 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using LibGit2Sharp;
 using NUnit.Framework;
+using OctoDB.Diagnostics;
 using OctoDB.Storage;
 using OctoDB.Tests.Fixtures;
 using OctoDB.Tests.SampleModel;
@@ -17,32 +22,32 @@ namespace OctoDB.Tests
             var createWatch = Stopwatch.StartNew();
             using (var session = Store.OpenWriteSession())
             {
-                for (var i = 0; i < 300; i++)
-                {
-                    session.Store(new Project { Id = "acme-" + i, Name = "ACME " + i, Description = "My **best** project" });
-                    session.Store(new DeploymentProcess { Id = "acme-" + i, Steps = new List<Step>
-                    {
-                        new Step { Name = "Step 1", Id = Guid.NewGuid().ToString(), Properties =
-                        {
-                            { "Foo.Bar", "Hello" },
-                            { "Foo.Baz", "Bye!" },
-                        }}
-                    } });
-                    session.Store(new VariableSet { Id = "acme-" + i, Variables =
-                    {
-                        { "DatabaseName", "MyDB" },
-                        { "ConnectionString", "Server=(local);Database=#{DatabaseName};trusted_Connection=true" },
-                    } });
-                }
+                //for (var i = 0; i < 300; i++)
+                //{
+                //    session.Store(new Project { Id = "acme-" + i, Name = "ACME " + i, Description = "My **best** project" });
+                //    session.Store(new DeploymentProcess { Id = "acme-" + i, Steps = new List<Step>
+                //    {
+                //        new Step { Name = "Step 1", Id = Guid.NewGuid().ToString(), Properties =
+                //        {
+                //            { "Foo.Bar", "Hello" },
+                //            { "Foo.Baz", "Bye!" },
+                //        }}
+                //    } });
+                //    session.Store(new VariableSet { Id = "acme-" + i, Variables =
+                //    {
+                //        { "DatabaseName", "MyDB" },
+                //        { "ConnectionString", "Server=(local);Database=#{DatabaseName};trusted_Connection=true" },
+                //    } });
+                //}
 
-                for (var i = 0; i < 100; i++)
-                {
-                    session.Store(new DeploymentEnvironment { Id = "env-" + i, Name = "Environment " + i });
-                }
+                //for (var i = 0; i < 100; i++)
+                //{
+                //    session.Store(new DeploymentEnvironment { Id = "env-" + i, Name = "Environment " + i });
+                //}
 
                 for (var i = 0; i < 2000; i++)
                 {
-                    session.Store(new Machine { Id = "machine-" + i, Name = "Machine " + i, Properties =
+                    session.Store(new Machine { Name = "Machine " + i, Properties =
                     {
                         { "Url", "https://localhost:8080/" }
                     }});
@@ -54,6 +59,8 @@ namespace OctoDB.Tests
             Console.WriteLine("Create took: " + createWatch.ElapsedMilliseconds + "ms");
 
             createWatch.Restart();
+            Store.Statistics.Print();
+            Store.Statistics.SnapshotAndReset();
 
             using (var session = Store.OpenReadSession())
             {
@@ -63,6 +70,9 @@ namespace OctoDB.Tests
             Console.WriteLine("Read: " + createWatch.ElapsedMilliseconds + "ms");
 
             createWatch.Restart();
+
+            Store.Statistics.Print();
+            Store.Statistics.SnapshotAndReset();
 
             using (var session = Store.OpenReadSession())
             {
@@ -194,6 +204,59 @@ namespace OctoDB.Tests
             }
 
             Trace.WriteLine("Loaded: " + count);
+        }
+
+        [Test]
+        public void RepoTest()
+        {
+            Repository.Init("Hello");
+            DoCommit();
+            DoCommit();
+            DoCommit();
+            DoCommit();
+        }
+
+        int commitNumber;
+
+        void DoCommit()
+        {
+            commitNumber++;
+            using (var repo = new Repository("Hello"))
+            {
+                var content = "Hello commit! " + Guid.NewGuid();
+
+                var parents = new Commit[0];
+                var treeDefinition = new TreeDefinition();
+                if (repo.Head.Tip != null)
+                {
+                    treeDefinition = TreeDefinition.From(repo.Head.Tip);
+                    parents = new[] { repo.Head.Tip };
+                }
+
+                var newBlob = repo.ObjectDatabase.CreateBlob(new MemoryStream(Encoding.UTF8.GetBytes(content)));
+
+                treeDefinition.Add("filePath.txt", newBlob, Mode.NonExecutableFile);
+                
+                var tree = repo.ObjectDatabase.CreateTree(treeDefinition);
+                var committer = new Signature("James", "@jugglingnutcase", DateTime.Now);
+                var author = committer;
+                var commit = repo.ObjectDatabase.CreateCommit(
+                    author,
+                    committer,
+                    "Commit " + commitNumber,
+                    tree, parents, false);
+
+                var master = repo.Branches.FirstOrDefault(b => b.Name == "master");
+                if (master == null)
+                {
+                    master = repo.Branches.Add("master", commit);
+                }
+
+                // Update the HEAD reference to point to the latest commit
+                repo.Refs.UpdateTarget(master.CanonicalName, commit.Id.ToString());
+
+                repo.Reset(ResetMode.Hard, commit);
+            }
         }
     }
 }

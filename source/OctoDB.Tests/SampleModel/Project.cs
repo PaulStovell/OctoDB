@@ -48,7 +48,7 @@ namespace OctoDB.Tests.SampleModel
             Properties = new Dictionary<string, string>();
         }
 
-        public string Id { get; set; }
+        public int Id { get; set; }
         public string Name { get; set; }
         public Dictionary<string, string> Properties { get; set; } 
     }

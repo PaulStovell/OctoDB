@@ -90,11 +90,16 @@ namespace OctoDB.Storage
             }
         }
 
-        public static string GetId(object instance)
+        public static object GetId(object instance)
         {
             var type = instance.GetType();
             Ensure(type);
-            return (string)idPropertyReaderWriters[type].Read(instance);
+            return (object)idPropertyReaderWriters[type].Read(instance);
+        }
+
+        public static void AssignId(object instance, object id)
+        {
+            idPropertyReaderWriters[instance.GetType()].Write(instance, id);
         }
 
         public static void AssignId(string path, object instance)

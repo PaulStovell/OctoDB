@@ -63,7 +63,7 @@ namespace OctoDB.Storage
         {
             statistics.IncrementWriteSessionsOpened();
             var anchor = storageEngine.GetCurrentAnchor();
-            return new WriteableSession(storageEngine, statistics, documentEncoder, anchor, DisposeWriteSession);
+            return new WriteableSession(storageEngine, statistics, documentEncoder, anchor, new List<IWriteSessionExtension> { new LinearChunkIdentityGenerator() },  DisposeWriteSession);
         }
 
         void DisposeReadSession()
