@@ -6,14 +6,14 @@ namespace OctoDB.Storage
     public class LoadByTypeVisitor<T> : IStorageVisitor where T : class
     {
         readonly DocumentSet documents;
-        readonly ICodec codec;
+        readonly IEncoderRegistry encoderRegistry;
         readonly List<T> loaded = new List<T>();
         readonly string parentPath;
 
-        public LoadByTypeVisitor(DocumentSet documents, ICodec codec)
+        public LoadByTypeVisitor(DocumentSet documents, IEncoderRegistry encoderRegistry)
         {
             this.documents = documents;
-            this.codec = codec;
+            this.encoderRegistry = encoderRegistry;
             parentPath = Conventions.GetParentPath(typeof (T));
         }
 
@@ -44,7 +44,7 @@ namespace OctoDB.Storage
 
         object DecodeFile(StoredFile file)
         {
-            return codec.Decode(file.Path, file.GetContents());
+            return encoderRegistry.Decode(file.Path, file.GetContents());
         }
     }
 }

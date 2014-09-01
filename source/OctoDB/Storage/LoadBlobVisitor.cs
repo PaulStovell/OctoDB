@@ -8,14 +8,14 @@ namespace OctoDB.Storage
     {
         readonly HashSet<string> pathsToLoad;
         readonly DocumentSet documents;
-        readonly ICodec codec;
+        readonly IEncoderRegistry encoderRegistry;
         readonly Dictionary<string, byte[]> loaded = new Dictionary<string, byte[]>();
 
-        public LoadBlobVisitor(IEnumerable<string> paths, DocumentSet documents, ICodec codec)
+        public LoadBlobVisitor(IEnumerable<string> paths, DocumentSet documents, IEncoderRegistry encoderRegistry)
         {
             pathsToLoad = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
             this.documents = documents;
-            this.codec = codec;
+            this.encoderRegistry = encoderRegistry;
         }
 
         public Dictionary<string, byte[]> Loaded
@@ -43,7 +43,7 @@ namespace OctoDB.Storage
 
         object DecodeFile(StoredFile file)
         {
-            return codec.Decode(file.Path, file.GetContents());
+            return encoderRegistry.Decode(file.Path, file.GetContents());
         }
     }
 }

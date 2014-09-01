@@ -5,13 +5,13 @@ namespace OctoDB.Storage
     public class LoadEverythingVisitor : IStorageVisitor
     {
         readonly DocumentSet set;
-        readonly ICodec codec;
+        readonly IEncoderRegistry encoderRegistry;
         readonly HashSet<string> visited;
 
-        public LoadEverythingVisitor(DocumentSet set, ICodec codec, HashSet<string> visited)
+        public LoadEverythingVisitor(DocumentSet set, IEncoderRegistry encoderRegistry, HashSet<string> visited)
         {
             this.set = set;
-            this.codec = codec;
+            this.encoderRegistry = encoderRegistry;
             this.visited = visited;
         }
 
@@ -31,7 +31,7 @@ namespace OctoDB.Storage
 
         object DecodeFile(StoredFile file)
         {
-            return codec.Decode(file.Path, file.GetContents());
+            return encoderRegistry.Decode(file.Path, file.GetContents());
         }
     }
 }

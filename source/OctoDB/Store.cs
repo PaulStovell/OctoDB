@@ -9,18 +9,18 @@ namespace OctoDB
     {
         readonly IStatistics statistics;
         readonly IStorageEngine storageEngine;
+        readonly EncoderSelector encoders;
         readonly object readSnapshotLock = new object();
         DocumentSet lastReadSnapshot;
-        readonly EncoderSelector codec;
 
         public Store(string rootPath)
         {
             statistics = new Statistics();
             storageEngine = new StorageEngine(rootPath, statistics);
 
-            codec = new EncoderSelector();
-            codec.Add(new JsonDocumentEncoder(statistics));
-            codec.Add(new BlobEncoder());
+            encoders = new EncoderSelector();
+            encoders.Add(new JsonDocumentEncoder(statistics));
+            encoders.Add(new BlobEncoder());
         }
 
         public IStorageEngine StorageEngine { get { return storageEngine; } }
@@ -49,7 +49,7 @@ namespace OctoDB
                 }
 
                 var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var visitor = new LoadEverythingVisitor(documents, codec, visited);
+                var visitor = new LoadEverythingVisitor(documents, encoders, visited);
                 storageEngine.Visit(anchor, visitor);
                 lastReadSnapshot = documents;
 
@@ -72,14 +72,14 @@ namespace OctoDB
         {
             statistics.IncrementHistoricalReadSessionsOpened();
 
-            return new HistoricalReadSession(storageEngine, codec, anchor, DisposeHistoricalReadSession);
+            return new HistoricalReadSession(storageEngine, encoders, anchor, DisposeHistoricalReadSession);
         }
 
         public WriteSession OpenWriteSession()
         {
             statistics.IncrementWriteSessionsOpened();
             var anchor = storageEngine.GetCurrentAnchor();
-            return new WriteSession(storageEngine, statistics, codec, anchor, new List<IWriteSessionExtension> { new LinearChunkIdentityGenerator() },  DisposeWriteSession);
+            return new WriteSession(storageEngine, statistics, encoders, anchor, new List<IWriteSessionExtension> { new LinearChunkIdentityGenerator() },  DisposeWriteSession);
         }
 
         void DisposeReadSession()

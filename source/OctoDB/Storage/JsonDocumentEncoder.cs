@@ -1,7 +1,5 @@
 using System;
-using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -9,68 +7,6 @@ using OctoDB.Diagnostics;
 
 namespace OctoDB.Storage
 {
-    public interface ICodec
-    {
-        object Decode(string path, Stream input);
-        void Encode(string path, object document, Stream output);
-    }
-
-    public class EncoderSelector : Collection<IEncoder>, ICodec
-    {
-        public object Decode(string path, Stream input)
-        {
-            var encoder = this.First(e => e.CanDecode(path));
-            return encoder.Decode(path, input);
-        }
-
-        public void Encode(string path, object document, Stream output)
-        {
-            var type = document.GetType();
-            var encoder = this.First(e => e.CanEncode(type));
-            encoder.Encode(path, document, output);
-        }
-    }
-
-    public interface IEncoder
-    {
-        bool CanDecode(string path);
-        object Decode(string path, Stream input);
-        void Encode(string path, object document, Stream output);
-        bool CanEncode(Type type);
-    }
-
-    public class BlobEncoder : IEncoder
-    {
-        public bool CanDecode(string path)
-        {
-            return true;
-        }
-
-        public object Decode(string path, Stream input)
-        {
-            using (var buffer = new MemoryStream())
-            {
-                input.CopyTo(buffer);
-                return buffer.ToArray();                
-            }
-        }
-
-        public void Encode(string path, object document, Stream output)
-        {
-            var data = (byte[]) document;
-            using (var writer = new BinaryWriter(output))
-            {
-                writer.Write(data);
-                writer.Flush();
-            }
-        }
-
-        public bool CanEncode(Type type)
-        {
-            return type == typeof (byte[]);
-        }
-    }
-
     public class JsonDocumentEncoder : IEncoder
     {
         readonly JsonSerializerSettings serializerSettings;
