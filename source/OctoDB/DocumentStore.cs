@@ -5,7 +5,7 @@ using OctoDB.Storage;
 
 namespace OctoDB
 {
-    public class Store : IDisposable
+    public class DocumentStore : IDocumentStore
     {
         readonly IStatistics statistics;
         readonly IStorageEngine storageEngine;
@@ -13,7 +13,7 @@ namespace OctoDB
         readonly object readSnapshotLock = new object();
         DocumentSet lastReadSnapshot;
 
-        public Store(string rootPath)
+        public DocumentStore(string rootPath)
         {
             statistics = new Statistics();
             storageEngine = new StorageEngine(rootPath, statistics);

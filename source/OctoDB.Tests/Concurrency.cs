@@ -65,7 +65,7 @@ namespace OctoDB.Tests
         {
             return StartOnMySignal(signalWhenReadyToStart, delegate
             {
-                using (var session = Store.OpenReadSession())
+                using (var session = DocumentStore.OpenReadSession())
                 {
                     var projects = session.Query<Project>();
 
@@ -88,7 +88,7 @@ namespace OctoDB.Tests
             return StartOnMySignal(signalWhenReadyToStart, delegate
             {
 
-                using (var session = Store.OpenWriteSession())
+                using (var session = DocumentStore.OpenWriteSession())
                 {
                     for (var j = 0; j < 20; j++)
                     {

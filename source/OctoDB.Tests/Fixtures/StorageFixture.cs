@@ -8,7 +8,7 @@ namespace OctoDB.Tests.Fixtures
 {
     public class StorageFixture
     {
-        protected Store Store { get; set; }
+        protected DocumentStore DocumentStore { get; set; }
 
         [SetUp]
         public void SetUp()
@@ -16,15 +16,15 @@ namespace OctoDB.Tests.Fixtures
             var path = Path.Combine(Environment.CurrentDirectory, GetType().Name + "Test");
             EnsurePath(path);
 
-            Store = new Store(path);
+            DocumentStore = new DocumentStore(path);
         }
 
         [TearDown]
         public void TearDown()
         {
-            Store.Statistics.Print();
+            DocumentStore.Statistics.Print();
 
-            Store.Dispose();
+            DocumentStore.Dispose();
         }
 
         static void EnsurePath(string path)

@@ -52,6 +52,7 @@
     <Compile Include="Diagnostics\StatisticsExtensions.cs" />
     <Compile Include="DocumentAttribute.cs" />
     <Compile Include="Diagnostics\StatisticsSnapshot.cs" />
+    <Compile Include="IDocumentStore.cs" />
     <Compile Include="Storage\BlobEncoder.cs" />
     <Compile Include="Storage\CommitSignature.cs" />
     <Compile Include="Storage\DocumentSet.cs" />
@@ -74,13 +75,12 @@
     <Compile Include="Storage\LoadByTypeVisitor.cs" />
     <Compile Include="Storage\LoadEverythingVisitor.cs" />
     <Compile Include="Storage\NonClosableStream.cs" />
-    <Compile Include="HistoryEntry.cs" />
     <Compile Include="IAnchor.cs" />
     <Compile Include="Storage\Conventions.cs" />
     <Compile Include="Storage\IStorageEngine.cs" />
     <Compile Include="IWriteSession.cs" />
     <Compile Include="Storage\ReadSession.cs" />
-    <Compile Include="Store.cs" />
+    <Compile Include="DocumentStore.cs" />
     <Compile Include="Storage\StoredFile.cs" />
     <Compile Include="Storage\WriteSession.cs" />
     <Compile Include="Util\IPropertyReaderWriter.cs" />

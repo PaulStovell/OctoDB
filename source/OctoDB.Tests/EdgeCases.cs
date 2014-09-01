@@ -12,7 +12,7 @@ namespace OctoDB.Tests
         [Test]
         public void WriteSession_CannotStoreTwoObjectsWithSameId()
         {
-            using (var session = Store.OpenWriteSession())
+            using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Store(new Project { Id = "acme", Name = "ACME Web 1" });
                 Assert.Throws<IdentifierAlreadyInUseException>(() => session.Store(new Project {Id = "acme", Name = "ACME Web 2"}));
@@ -22,7 +22,7 @@ namespace OctoDB.Tests
         [Test]
         public void WriteSession_CanStoreTwoObjectsWithSameIdButDifferentType()
         {
-            using (var session = Store.OpenWriteSession())
+            using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Store(new Project { Id = "acme", Name = "ACME Web 1" });
                 session.Store(new VariableSet {Id = "acme"});
@@ -33,7 +33,7 @@ namespace OctoDB.Tests
         [Test]
         public void WriteSession_StoreNullIsIgnored()
         {
-            using (var session = Store.OpenWriteSession())
+            using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Store(null);
                 session.Commit("Did nothing");
@@ -43,7 +43,7 @@ namespace OctoDB.Tests
         [Test]
         public void WriteSession_DeleteUnstoredObjectIsIgnored()
         {
-            using (var session = Store.OpenWriteSession())
+            using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Delete(new Project { Id = "acme" });
                 session.Commit("Did nothing");
@@ -53,7 +53,7 @@ namespace OctoDB.Tests
         [Test]
         public void WriteSession_DeleteNullIsIgnored()
         {
-            using (var session = Store.OpenWriteSession())
+            using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Store(null);
                 session.Commit("Did nothing");
@@ -63,7 +63,7 @@ namespace OctoDB.Tests
         [Test]
         public void WriteSession_CannotStoreDocumentsWithoutAttribute()
         {
-            using (var session = Store.OpenWriteSession())
+            using (var session = DocumentStore.OpenWriteSession())
             {
                 Assert.Throws<InvalidOperationException>(() => session.Store(new TypeWithNoAttribute()));
                 Assert.Throws<InvalidOperationException>(() => session.Store(new TypeWithNoId()));

@@ -1,4 +1,6 @@
-namespace OctoDB.Storage
+using OctoDB.Storage;
+
+namespace OctoDB
 {
     public interface IAnchor
     {
