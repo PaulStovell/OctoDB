@@ -4,20 +4,22 @@ namespace OctoDB.Storage
 {
     public class CommitSignature
     {
-        readonly string name;
-        readonly string emailAddress;
-        readonly DateTimeOffset when;
+        public string Name { get; private set; }
+        public string EmailAddress { get; private set; }
+        public DateTimeOffset When { get; private set; }
 
         public CommitSignature(string name, string emailAddress, DateTimeOffset when)
         {
-            this.name = name;
-            this.emailAddress = emailAddress;
-            this.when = when;
+            Name = name;
+            EmailAddress = emailAddress;
+            When = when;
         }
+
+        
 
         public override string ToString()
         {
-            return name;
+            return Name;
         }
     }
 }

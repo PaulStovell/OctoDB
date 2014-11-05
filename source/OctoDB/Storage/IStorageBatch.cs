@@ -7,6 +7,6 @@ namespace OctoDB.Storage
     {
         void Put(string path, Action<Stream> streamWriter);
         void Delete(string path);
-        void Commit(string message);
+        void Commit(string message,CommitSignature commitSignature, string branchName);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using LibGit2Sharp;
 using NUnit.Framework;
 using OctoDB.Storage;
 using OctoDB.Tests.Fixtures;
@@ -26,7 +27,7 @@ namespace OctoDB.Tests
             {
                 session.Store(new Project { Id = "acme", Name = "ACME Web 1" });
                 session.Store(new VariableSet {Id = "acme"});
-                session.Commit("Added a project and variable set");
+                session.Commit("Added a project and variable set", CommitSign, CommitBranch);
             }
         }
 
@@ -36,7 +37,7 @@ namespace OctoDB.Tests
             using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Store(null);
-                session.Commit("Did nothing");
+                session.Commit("Did nothing", CommitSign, CommitBranch);
             }
         }
 
@@ -46,7 +47,7 @@ namespace OctoDB.Tests
             using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Delete(new Project { Id = "acme" });
-                session.Commit("Did nothing");
+                session.Commit("Did nothing", CommitSign, CommitBranch);
             }
         }
 
@@ -56,7 +57,7 @@ namespace OctoDB.Tests
             using (var session = DocumentStore.OpenWriteSession())
             {
                 session.Store(null);
-                session.Commit("Did nothing");
+                session.Commit("Did nothing", CommitSign, CommitBranch);
             }
         }
 

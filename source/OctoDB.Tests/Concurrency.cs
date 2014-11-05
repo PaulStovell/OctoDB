@@ -102,7 +102,7 @@ namespace OctoDB.Tests
                         session.Store(project);
                     }
 
-                    session.Commit("Added 20 projects from: " + i);
+                    session.Commit("Added 20 projects from: " + i, CommitSign, CommitBranch );
                 }
 
                 Interlocked.Add(ref writes, 25);

@@ -14,10 +14,12 @@ namespace OctoDB.Storage
         readonly Repository repository;
         readonly ReaderWriterLockSlim sync = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
         readonly IStatistics statistics;
+        readonly string branchName;
         
-        public StorageEngine(string rootPath, IStatistics statistics)
+        public StorageEngine(string rootPath, IStatistics statistics, string branchName)
         {
             this.statistics = statistics;
+            this.branchName = branchName;
             Repository.Init(rootPath);
             repository = new Repository(rootPath);
         }
@@ -167,14 +169,7 @@ namespace OctoDB.Storage
             public void Prepare()
             {
                 parent = repository.Head.Tip;
-                if (parent == null)
-                {
-                    treeDefinition = new TreeDefinition();
-                }
-                else
-                {
-                    treeDefinition = TreeDefinition.From(parent.Tree);
-                }
+                treeDefinition = parent == null ? new TreeDefinition() : TreeDefinition.From(parent.Tree);
 
                 GitReset();
             }
@@ -214,7 +209,7 @@ namespace OctoDB.Storage
                 }
             }
 
-            public void Commit(string message)
+            public void Commit(string message, CommitSignature commitSignature, string branchName)
             {
                 using (statistics.MeasureGitCommit())
                 {
@@ -223,21 +218,21 @@ namespace OctoDB.Storage
                     var parents = parent == null ? new Commit[0] : new[] { parent };
 
                     var commit = repository.ObjectDatabase.CreateCommit(
-                        new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
-                        new Signature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow),
+                        new Signature(commitSignature.Name, commitSignature.EmailAddress, commitSignature.When),
+                        new Signature(commitSignature.Name, commitSignature.EmailAddress, commitSignature.When),
                         message,
                         tree,
                         parents,
                         false);
 
-                    var masterBranch = repository.Branches.FirstOrDefault(b => b.Name == "master");
-                    if (masterBranch == null)
+                    var curBranch = repository.Branches.FirstOrDefault(b => b.Name == branchName);
+                    if (curBranch == null)
                     {
-                        masterBranch = repository.CreateBranch("master", commit);
-                        repository.Checkout(masterBranch, new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
+                        curBranch = repository.CreateBranch(branchName, commit);
+                        repository.Checkout(curBranch, new CheckoutOptions { CheckoutModifiers = CheckoutModifiers.Force });
                     }
 
-                    repository.Refs.UpdateTarget(masterBranch.CanonicalName, commit.Id.ToString());
+                    repository.Refs.UpdateTarget(curBranch.CanonicalName, commit.Id.ToString());
 
                     using (statistics.MeasureGitReset())
                     {
