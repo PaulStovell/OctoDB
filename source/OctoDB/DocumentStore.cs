@@ -13,10 +13,10 @@ namespace OctoDB
         readonly object readSnapshotLock = new object();
         DocumentSet lastReadSnapshot;
 
-        public DocumentStore(string rootPath)
+        public DocumentStore(string rootPath, string branchName)
         {
             statistics = new Statistics();
-            storageEngine = new StorageEngine(rootPath, statistics);
+            storageEngine = new StorageEngine(rootPath, statistics, branchName);
 
             encoders = new EncoderSelector();
             encoders.Add(new JsonDocumentEncoder(statistics));

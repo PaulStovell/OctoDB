@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using NUnit.Framework;
 using OctoDB.Diagnostics;
+using OctoDB.Storage;
 
 namespace OctoDB.Tests.Fixtures
 {
@@ -10,13 +11,18 @@ namespace OctoDB.Tests.Fixtures
     {
         protected DocumentStore DocumentStore { get; set; }
 
+        public const string CommitBranch = "master";
+
+        protected CommitSignature CommitSign;
+
         [SetUp]
         public void SetUp()
         {
             var path = Path.Combine(Environment.CurrentDirectory, GetType().Name + "Test");
             EnsurePath(path);
 
-            DocumentStore = new DocumentStore(path);
+            DocumentStore = new DocumentStore(path,CommitBranch);
+            CommitSign = new CommitSignature("paul", "paul@paulstovell.com", DateTimeOffset.UtcNow);
         }
 
         [TearDown]
@@ -37,6 +43,7 @@ namespace OctoDB.Tests.Fixtures
                 DeleteFileSystemInfo(directory);
             }
             directory.Create();
+            
         }
 
         private static void DeleteFileSystemInfo(FileSystemInfo fileSystemInfo)

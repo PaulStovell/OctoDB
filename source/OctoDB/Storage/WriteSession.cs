@@ -86,7 +86,7 @@ namespace OctoDB.Storage
             CallExtensions((ext, ctx) => ext.AfterDelete(item, ctx));
         }
 
-        public void Commit(string message)
+        public void Commit(string message, CommitSignature commitSignature, string branchName)
         {
             CallExtensions((ext, ctx) => ext.BeforeCommit(batch, ctx));
 
@@ -107,7 +107,7 @@ namespace OctoDB.Storage
                 batch.Put(path, stream => encoder.Encode(path, document, stream));
             }
 
-            batch.Commit(message);
+            batch.Commit(message, commitSignature, branchName);
 
             CallExtensions((ext, ctx) => ext.AfterCommit(ctx));
         }
